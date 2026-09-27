@@ -22,44 +22,31 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
-let verbose = ref false
+let parse_file filename =
+  let input =
+    In_channel.with_open_text filename In_channel.input_all
+  in
 
-let output_rocq = ref false
-let output_filename = ref ""
+  let lexbuf = Lexing.from_string input in
 
-let input_files = ref []
-let julia_ast_json = ref ""
-
-let parse_arguments () =
-  let n = Array.length Sys.argv in
-  (if n <= 1 then (
-    Output.help (); 
-    exit 0)
-  else
-    let i = ref 1 in
-    while !i < n do
-      (match Sys.argv.(!i) with
-      | "-h" | "-H" | "--help" -> Output.help (); exit 0
-      | "-V" | "-v" | "--verbose" -> verbose := true
-      | "-o" ->
-        if !i < n - 1 then (
-          output_rocq := true;
-          output_filename := Sys.argv.(!i + 1);
-          i := !i + 1
-        ) else
-          Output.fatal_error "-o option requires 1 argument" 1
-      | _ -> 
-        if Sys.file_exists Sys.argv.(!i) then
-          input_files := Sys.argv.(!i) :: !input_files
-        else
-          Output.error ("no such file or directory: \'" ^ Sys.argv.(!i) ^ "\'"));
-      i := !i + 1
-    done);
-  if List.length !input_files = 0 then
-    Output.fatal_error "no input files" 1
+  try
+    Parser.program Lexer.token lexbuf
+  with
+  | Parser.Error ->
+      let pos = lexbuf.Lexing.lex_curr_p in
+      Printf.eprintf
+        "Parse error at line %d, column %d\n"
+        pos.pos_lnum
+        (pos.pos_cnum - pos.pos_bol);
+      exit 1
 
 let () =
-  parse_arguments ();
-  julia_ast_json := Parser.parse_julia_input_files !input_files;
-  (* print_endline !julia_ast_json; *)
-  exit 0
+  if Array.length Sys.argv <> 2 then begin
+    Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0);
+    exit 1
+  end;
+
+  let filename = Sys.argv.(1) in
+  let ast = parse_file filename in
+
+  Ast.print_ast ast

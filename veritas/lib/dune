@@ -1,2 +1,8 @@
 (library
- (name veritas))
+ (name veritas)
+ (wrapped false))
+
+(menhir
+ (modules parser))
+
+(ocamllex lexer)

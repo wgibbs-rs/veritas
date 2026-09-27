@@ -1,5 +1,7 @@
 (lang dune 3.19)
 
+(using menhir 2.1)
+
 (name veritas)
 
 (generate_opam_files true)
@@ -14,13 +16,5 @@
 (license LICENSE)
 
 (documentation https://url/to/documentation)
-
-(package
- (name veritas)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml)
- (tags
-  ("add topics" "to describe" your project)))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

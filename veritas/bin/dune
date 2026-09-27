@@ -1,4 +1,3 @@
 (executable
- (public_name veritas)
  (name main)
- (libraries unix))
+ (libraries veritas))
