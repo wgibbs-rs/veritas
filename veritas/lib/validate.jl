@@ -1,4 +1,4 @@
-(*
+"""
 ZLib License
 
 Copyright (c) 2025 William Gibbs
@@ -20,17 +20,17 @@ freely, subject to the following restrictions:
     misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
-*)
+"""
 
-let () =
-  if Array.length Sys.argv <> 2 then begin
-    Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0);
-    exit 1
-  end;
+# Process the code with clauses in the form of comments. 
+# Failure -> Prints the error to the stdout, which is then shown by OCaml. exit(1)
+# Success -> Does not print anything. exit(0)
 
-  Ast.validate_syntax Sys.argv.(1);
-  Ast.print_ast Sys.argv.(1);
-
-  let ast = Ast.get_ast Sys.argv.(1) in
-  match ast with
-  | _ -> print_endline "called get_ast"
+try
+    include(expr -> (Meta.isexpr(expr, :error) || Meta.isexpr(expr, :incomplete)) ? expr : nothing, ARGS[1])
+    exit(0)
+catch e
+    println(stdout, "Veritas: Error: Failed to parse input file...")
+    showerror(stdout, e, catch_backtrace())
+    exit(1)
+end

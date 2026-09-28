@@ -1,159 +1,90 @@
-type expr =
-    | Int of int
-    | Ident of string
+(*
+ZLib License
+
+Copyright (c) 2025 William Gibbs
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+    claim that you wrote the original software. If you use this software
+    in a product, an acknowledgment in the product documentation would be
+    appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
+*)
+
+type ast =
+    | Expr of string * ast list
+    | Symbol of string
     | String of string
-    | Add of expr * expr
-    | Subtract of expr * expr
-    | Multiply of expr * expr
-    | Divide of expr * expr
-    | EQ of expr * expr
-    | NEQ of expr * expr
-    | LT of expr * expr
-    | LE of expr * expr
-    | GT of expr * expr
-    | GE of expr * expr
+    | Int of int
+    | Float of float
+    | Bool of bool
+    | Null
+    
+let rec ast_of_json (json : Yojson.Safe.t) =
+    match json with
+    | `Assoc fields ->
+        let head =
+            match List.assoc_opt "head" fields with
+            | Some (`String s) -> s
+            | _ -> failwith "Expected string field 'head'"
+        in
 
-type arg = 
-    | Typeless of string
+        let args =
+            match List.assoc_opt "args" fields with
+            | Some (`List xs) -> List.map ast_of_json xs
+            | _ -> failwith "Expected list field 'args'"
+        in
 
-type clause = 
-    | Requires of expr
-    | Ensures of expr
-
-type statement =
-    | Assignment of string * expr
-    | Function of string * arg list * statement list
-    | Return of expr
-    | Clause of clause (* ACSL clauses *)
-    | WS
-
-type program = statement list
+        Expr (head, args)
+    | `String s -> Symbol s
+    | `Int i -> Int i
+    | `Float f -> Float f
+    | `Bool b -> Bool b
+    | `Null -> Null
+    | _ -> failwith "Unexpected JSON value"
 
 let validate_syntax filename =
-    let validator = {|
-      try
-        include(expr -> (Meta.isexpr(expr, :error) || Meta.isexpr(expr, :incomplete)) ? expr : nothing, ARGS[1])
-        exit(0)
-      catch e
-        println(stdout, "Error while parsing input file.")
-        println(stdout)
-        showerror(stdout, e, catch_backtrace())
-        println(stdout)
-        flush(stdout)
-        exit(1)
-      end
-    |} in
     let ic =
-      Unix.open_process_args_in
+        Unix.open_process_args_in
         "julia"
-        [| "julia"; "-e"; validator; filename |]
+        [| "julia"; "-e"; Bridge.validate_src; filename |]
     in
     let output = In_channel.input_all ic in
     let result = Unix.close_process_in ic in
     if result <> Unix.WEXITED 0 then
-      print_string output
+        print_string output
 
-let rec print_expr indent = function
-    | Int n ->
-        Printf.printf "%s%d\n" indent n
-    | Ident name ->
-        Printf.printf "%s%s\n" indent name
-    | String name ->
-        Printf.printf "%s%s\n" indent name
-    | Add (lhs, rhs) ->
-        Printf.printf "%s+\n" indent;
-        print_expr (indent ^ "  ") lhs;
-        print_expr (indent ^ "  ") rhs
-    | Subtract (lhs, rhs) ->
-        Printf.printf "%s-\n" indent;
-        print_expr (indent ^ "  ") lhs;
-        print_expr (indent ^ "  ") rhs
-    | Multiply (lhs, rhs) ->
-        Printf.printf "%s*\n" indent;
-        print_expr (indent ^ "  ") lhs;
-        print_expr (indent ^ "  ") rhs
-    | Divide (lhs, rhs) ->
-        Printf.printf "%s/\n" indent;
-        print_expr (indent ^ "  ") lhs;
-        print_expr (indent ^ "  ") rhs
-    | EQ (lhs, rhs) -> 
-        Printf.printf "%s==\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
-    | NEQ (lhs, rhs) -> 
-        Printf.printf "%s!=\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
-    | LT (lhs, rhs) -> 
-        Printf.printf "%s<\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
-    | LE (lhs, rhs) -> 
-        Printf.printf "%s<=\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
-    | GT (lhs, rhs) -> 
-        Printf.printf "%s>\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
-    | GE (lhs, rhs) -> 
-        Printf.printf "%s>=\n" indent;
-        (print_expr (indent ^ "  ") lhs);
-        (print_expr (indent ^ "  ") rhs)
+let get_json_ast filename =
+    let ic =
+    Unix.open_process_args_in
+        "julia"
+        [| "julia"; "-e"; Bridge.parser_src; filename; "n" |]
+    in
+    let output = In_channel.input_all ic in
+    let _ = Unix.close_process_in ic in
+    output
 
-let print_arg indent = function
-    | Typeless (name) ->
-        Printf.printf "%sArg" indent;
-        Printf.printf "%s%s : Any\n" (indent ^ "  ") name
+let print_ast filename = 
+    let ic =
+        Unix.open_process_args_in
+        "julia"
+        [| "julia"; "-e"; Bridge.parser_src; filename; "y" |]
+    in
+    let output = In_channel.input_all ic in
+    let _ = Unix.close_process_in ic in
+    print_string output
 
-let print_clause indent = function
-    | Requires expr ->
-        Printf.printf "%sRequires\n" indent;
-        print_expr indent expr
-    | Ensures expr ->
-        Printf.printf "%sEnsures\n" indent;
-        print_expr indent expr
-
-let rec print_statement indent = function
-    | Assignment (name, expr) ->
-        Printf.printf "%s%s := \n" indent name;
-        print_expr (indent ^ "  ") expr
-    | Function (name, args, statements) ->
-        Printf.printf "%sFunction %s\n" indent name;
-        (match args with
-        | [] ->
-            Printf.printf "%s[]\n" (indent ^ "  ")
-        | args' ->
-            List.iter
-                (print_arg (indent ^ "  "))
-                args');
-        Printf.printf "%sStatements\n" (indent ^ "  ");
-        List.iter
-            (print_statement (indent ^ "    "))
-            statements;
-    | Return expr ->
-        Printf.printf "%sReturn\n" indent;
-        print_expr (indent ^ "  ") expr
-    | Clause clause ->
-        Printf.printf "%sACSL Clause\n" indent;
-        print_clause (indent ^ "  ") clause
-    | WS ->
-        Printf.printf ""
-
-let print_statements indent = function
-    | [] ->
-        Printf.printf "No Statements.\n"
-    | statements ->
-        Printf.printf "Statement List\n";
-        List.iter
-            (print_statement (indent ^ "  "))
-            statements
-
-let print_ast = function
-    | [] ->
-        Printf.printf "Program\n"
-    | statements ->
-        Printf.printf "Program\n";
-        List.iter
-            (print_statement "  ")
-            statements
+let get_ast filename =
+    let json_str : string = get_json_ast filename in
+    ast_of_json (Yojson.Safe.from_string json_str)

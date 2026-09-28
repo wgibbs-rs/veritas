@@ -1,4 +1,24 @@
 (library
  (name veritas)
  (wrapped false)
- (libraries unix))
+ (libraries unix yojson))
+
+(rule
+ (targets bridge.ml)
+ (deps parser.jl validate.jl)
+ (action
+  (with-stdout-to %{targets}
+   (progn
+    (echo "let parser_src = {|")
+    (cat parser.jl)
+    (echo "|}")
+    (echo "")
+    (echo "let validate_src = {|")
+    (cat validate.jl)
+    (echo "|}")))))
+
+(install
+ (section share)
+ (files
+  parser.jl
+  validate.jl))
