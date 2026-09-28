@@ -1,4 +1,5 @@
-function hello()
+#@ requires x > 0
+function hello(x, y, z)
     d = "World"
     a = 1
     b = 2
@@ -6,4 +7,4 @@ function hello()
     d = a + b
     e = a + b * c
     return x
-en
+end

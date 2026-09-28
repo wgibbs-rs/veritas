@@ -22,19 +22,8 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
-let parse_file filename =
-  let input = In_channel.with_open_text filename In_channel.input_all in
-  let lexbuf = Lexing.from_string input in
-  try
-    Parser.program Lexer.token lexbuf
-  with
-  | Parser.Error ->
-      let pos = lexbuf.Lexing.lex_curr_p in
-      Printf.eprintf
-        "Parse error at line %d, column %d\n"
-        pos.pos_lnum
-        (pos.pos_cnum - pos.pos_bol);
-      exit 1
+let parse_file _filename =
+  [Ast.WS]
 
 let () =
   if Array.length Sys.argv <> 2 then begin
@@ -44,9 +33,7 @@ let () =
 
   let filename = Sys.argv.(1) in
 
-  match (Lexer.validate_syntax filename) with
-  | Failure o -> print_string o
-  | Success -> print_string "";
+  Ast.validate_syntax filename;
 
   let ast = parse_file filename in
 

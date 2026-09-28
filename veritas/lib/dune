@@ -2,8 +2,3 @@
  (name veritas)
  (wrapped false)
  (libraries unix))
-
-(menhir
- (modules parser))
-
-(ocamllex lexer)
