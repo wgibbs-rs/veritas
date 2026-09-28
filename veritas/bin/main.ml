@@ -23,12 +23,8 @@ freely, subject to the following restrictions:
 *)
 
 let parse_file filename =
-  let input =
-    In_channel.with_open_text filename In_channel.input_all
-  in
-
+  let input = In_channel.with_open_text filename In_channel.input_all in
   let lexbuf = Lexing.from_string input in
-
   try
     Parser.program Lexer.token lexbuf
   with
@@ -47,6 +43,11 @@ let () =
   end;
 
   let filename = Sys.argv.(1) in
+
+  match (Lexer.validate_syntax filename) with
+  | Failure o -> print_string o
+  | Success -> print_string "";
+
   let ast = parse_file filename in
 
   Ast.print_ast ast

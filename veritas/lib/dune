@@ -1,6 +1,7 @@
 (library
  (name veritas)
- (wrapped false))
+ (wrapped false)
+ (libraries unix))
 
 (menhir
  (modules parser))

@@ -1,4 +1,33 @@
 {
+
+  type validator_result =
+  | Success
+  | Failure of string
+
+  let validate_syntax filename =
+    let validator = {|
+    try
+      include(expr -> (Meta.isexpr(expr, :error) || Meta.isexpr(expr, :incomplete)) ? expr : nothing, ARGS[1])
+      exit(0)
+    catch e
+        println(stdout, "Error while parsing input file.")
+        println(stdout)
+        showerror(stdout, e, catch_backtrace())
+        println(stdout)
+        flush(stdout)
+        exit(1)
+    end
+    |} in
+    let ic =
+      Unix.open_process_args_in
+        "julia"
+        [| "julia"; "-e"; validator; filename |]
+    in
+    let output = In_channel.input_all ic in
+    match Unix.close_process_in ic with
+    | Unix.WEXITED 0 -> Success
+    | _ -> Failure output
+    
   open Parser
 
   exception Lexing_error of string
@@ -27,6 +56,10 @@ rule token = parse
 
   (* Identifiers and keywords *)
   | identifier as name { keyword name }
+
+  (* Strings *)
+  | '\'' ([^ '\''])* '\'' { STRING (Lexing.lexeme lexbuf) }
+  | '"' ([^ '"'])* '"' { STRING (Lexing.lexeme lexbuf) }
 
   (* Newline *)
   | '\n' { NEWLINE }
@@ -57,13 +90,7 @@ rule token = parse
   (* Utility *)
   | '(' { LPAREN }
   | ')' { RPAREN }
-  | '{' { LBRACE }
-  | '}' { RBRACE }
-  | '[' { LBRACKET }
-  | ']' { RBRACKET }
   | ',' { COMMA }
-  | ';' { SEMICOLON }
-  | ':' { COLON }
   | '.' { DOT }
 
   (* End of input *)
