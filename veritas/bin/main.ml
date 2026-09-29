@@ -29,8 +29,10 @@ let () =
   end;
 
   Ast.validate_syntax Sys.argv.(1);
-  Ast.print_ast Sys.argv.(1);
 
   let ast = Ast.get_ast Sys.argv.(1) in
-  match ast with
-  | _ -> print_endline "called get_ast"
+  (* Search for and create a list of all functions with conditions,
+  and their context they have access to.For now, we will assume only 
+  functions can be verified in Julia, given the nature of arguments. *)
+  let func_ctx_list = Ast.get_fn_list_of_program ast in
+  List.iter Ast.print_verifiable_function func_ctx_list

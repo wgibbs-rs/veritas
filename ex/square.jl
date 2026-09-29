@@ -1,17 +1,7 @@
-#@ requires x > 0
-function hello(x, y, z)
-    return x
-end
 
 #@ ensures \result > x
 # UNSAT
 function squared(x)
-
-    #@ ensures \result == y
-    function inside(y)
-        return y
-    end
-
     return x * x
 end
 

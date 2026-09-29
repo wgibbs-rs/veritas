@@ -59,6 +59,8 @@ src_plain = read(ARGS[1], String)
 
 # Replace instances of "#@" with "@ACSL" macro to prevent removal during AST retrieval.
 source_acsl_included = replace(src_plain, "#@" => "@ACSL")
+# Replace instances of "\result" with "__VERITAS_RESULT__" to prevent weird parsing problems.
+source_acsl_included = replace(source_acsl_included, "\\result" => "__VERITAS_RESULT__")
 
 # Retrieve the AST as an Expr tree.
 ast = get_ast(source_acsl_included)
