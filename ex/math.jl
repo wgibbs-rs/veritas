@@ -1,23 +1,8 @@
-#@ requires x > 0
-function hello(x, y, z)
-    return x
-end
 
-#@ ensures \result > x
-# UNSAT
-function squared(x)
-
-    #@ ensures \result == y
-    function inside(y)
-        return y
-    end
-
-    return x * x
-end
-
-#@ requires x > 0
-#@ ensures \result > x
-# SAT
-function squared_positive(x)
-    return x * x
+#@ ensures \result > x * 2
+function math(x)
+    y + 3
+    x - 1
+    z / 2
+    a * 4
 end

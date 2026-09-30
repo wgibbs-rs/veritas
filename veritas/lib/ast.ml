@@ -29,7 +29,6 @@ type ast =
     | Int of int
     | Float of float
     | Bool of bool
-    | Null
 
 let rec ast_of_json (json : Yojson.Safe.t) =
     match json with
@@ -50,7 +49,6 @@ let rec ast_of_json (json : Yojson.Safe.t) =
     | `Int i -> Int i
     | `Float f -> Float f
     | `Bool b -> Bool b
-    | `Null -> Null
     | _ -> failwith "Unexpected JSON value"
 
 let validate_syntax filename =
@@ -79,15 +77,16 @@ let get_ast filename =
     let json_str : string = get_json_ast filename in
     ast_of_json (Yojson.Safe.from_string json_str)
 
-
+open Propositions
 type clause =
-    | Requires of ast
-    | Ensures of ast
+    | Requires of prop
+    | Ensures of prop
 
 type verifiable_function = {
     requires: clause list; (* List of all ACSL requires clauses. *)
     ensures: clause list; (* List of all ACSL ensures clauses. *)
     context: ast list; (* A list of context accessible outside of this function. *)
+    title: string;
     fn: ast; (* (head, args)-containing function Expr. *)
 }
 
@@ -109,12 +108,57 @@ let rec print_ast_node_aux (ast : ast) (indent : string) =
         Printf.printf "%sFloat %f\n" indent f
     | Bool b ->
         Printf.printf "%sBool %b\n" indent b
-    | Null ->
-        Printf.printf "%sNull\n" indent
 
 let print_ast_node (ast : ast) = print_ast_node_aux ast ""
 
-let print_verifiable_function (f : verifiable_function) = print_ast_node f.fn
+let print_verifiable_function (f : verifiable_function) = 
+    Printf.printf "\n\n=== %s ===\n" f.title;
+    List.iter (fun x -> 
+        Printf.printf "Requires:\n"; 
+        match x with 
+        | (Requires y) -> print_proposition y 
+        | _ -> print_endline "  error reading requires value.") 
+        f.requires;
+    List.iter (fun x -> 
+        Printf.printf "Ensures:\n"; 
+        match x with 
+        | (Ensures y) -> print_proposition y 
+        | _ -> print_endline "  error reading ensures value.") 
+        f.ensures;
+    print_ast_node f.fn
+
+
+let rec ast_to_expr (a : ast) : expr =
+    match a with
+    | Expr (Symbol "call", [name; lhs; rhs]) ->
+        (match name with
+        | Symbol "+" -> Propositions.Add (ast_to_expr lhs, ast_to_expr rhs)
+        | Symbol "-" -> Propositions.Subtract (ast_to_expr lhs, ast_to_expr rhs)
+        | Symbol "*" -> Propositions.Multiply (ast_to_expr lhs, ast_to_expr rhs)
+        | Symbol "/" -> Propositions.Divide (ast_to_expr lhs, ast_to_expr rhs)
+        | _ -> failwith "unknown call")
+    | Symbol s -> Propositions.Ident s
+    | String s -> Propositions.String s
+    | Int i -> Propositions.Int i
+    | Float f -> Propositions.Float f
+    | Bool b ->  Propositions.Bool b
+    | _ -> failwith "uh oh"
+    
+let ast_to_prop (a : ast) : prop =
+    match a with
+    | Expr (head, args) ->
+        (match head, args with
+        | Symbol "call", [op; lhs; rhs] ->
+            (match op with
+            | Symbol "==" -> Propositions.EQ (ast_to_expr lhs, ast_to_expr rhs)
+            | Symbol "!=" -> Propositions.NEQ (ast_to_expr lhs, ast_to_expr rhs)
+            | Symbol "<" -> Propositions.LT (ast_to_expr lhs, ast_to_expr rhs)
+            | Symbol "<=" -> Propositions.LE (ast_to_expr lhs, ast_to_expr rhs)
+            | Symbol ">" -> Propositions.GT (ast_to_expr lhs, ast_to_expr rhs)
+            | Symbol ">=" -> Propositions.GE (ast_to_expr lhs, ast_to_expr rhs)
+            | _ -> failwith "bad operation structure")
+        | _ -> failwith "not a call")
+    | _ -> failwith "no ast"
 
 let rec get_fn_list_of_block_list (stmt_list : ast list) (context : ast list) (requires : clause list) (ensures : clause list) : (verifiable_function list) =
     (match stmt_list with
@@ -126,8 +170,8 @@ let rec get_fn_list_of_block_list (stmt_list : ast list) (context : ast list) (r
                 (match args with
                 | (Symbol "@ACSL") :: (Symbol clause_kind) :: c :: [] -> 
                     (let new_clause = (match clause_kind with
-                    | "requires" -> Requires c
-                    | "ensures" -> Ensures c
+                    | "requires" -> Requires (ast_to_prop c)
+                    | "ensures" -> Ensures (ast_to_prop c)
                     | _ -> failwith (Printf.sprintf "Veritas: Error: unknown ACSL clause type \"%s\"" clause_kind)) in
                     match new_clause with
                     | Requires _ ->
@@ -152,8 +196,11 @@ and extend_verifiable_function_block (fn : ast) (context : ast list) (requires :
             | Expr (call_head, call_args), Expr (block_head, block_args) -> 
                 (match call_head, block_head with
                 | Symbol "call", Symbol "block" -> 
-                    {requires = requires; ensures = ensures; context = (context @ call_args); fn = fn} ::
-                    (get_fn_list_of_block_list block_args (context @ call_args) [] [])
+                    (match call_args with
+                    | Symbol title :: _ ->
+                        {requires = requires; ensures = ensures; context = (context @ call_args); title = title; fn = fn} ::
+                        (get_fn_list_of_block_list block_args (context @ call_args) [] [])
+                    | _ -> failwith "Veritas: Error: no function title found.")
                 | _ -> failwith "Veritas: Error: unknown function call/block name")
             | _ -> failwith "Veritas: Error: unknown function call/block type")
         | _ -> failwith "Veritas: Error: unknown function structure")
