@@ -25,22 +25,72 @@ freely, subject to the following restrictions:
 open Propositions
 open Ast
 
-let apply_statement_to_vc (statement : ast) (_vc' : vc) : vc =
+let replace_e_e (e : expr) (x : expr) (y : expr) : expr =
+    if e = x then y else e
+
+let rec replace_all (p : prop) (x : expr) (y : expr) : prop =
+    match p with
+    | Boolean _ -> p
+    | EQ (lhs, rhs) -> EQ (replace_e_e lhs x y, replace_e_e rhs x y)
+    | NEQ (lhs, rhs) -> NEQ (replace_e_e lhs x y, replace_e_e rhs x y)
+    | LT (lhs, rhs) -> LT (replace_e_e lhs x y, replace_e_e rhs x y)
+    | LE (lhs, rhs) -> LE (replace_e_e lhs x y, replace_e_e rhs x y)
+    | GT (lhs, rhs) -> GT (replace_e_e lhs x y, replace_e_e rhs x y)
+    | GE (lhs, rhs) -> GE (replace_e_e lhs x y, replace_e_e rhs x y)
+    | NOT x' -> NOT (replace_all x' x y)
+    | AND (lhs, rhs) -> AND (replace_all lhs x y, replace_all rhs x y)
+    | OR (lhs, rhs) -> OR (replace_all lhs x y, replace_all rhs x y)
+    | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)
+    | IFF (lhs, rhs) -> IFF (replace_all lhs x y, replace_all rhs x y)
+
+let apply_statement_to_prop (statement : ast) (vc : prop) : prop =
+    print_endline (prop_to_string vc);
     match statement with
-    | Expr (head, _args) -> 
-        (match head with
-        | Symbol "=" -> failwith "TODO"
-        | Symbol "return" -> failwith "TODO"
-        | _ -> failwith "Veritas: Error: unrecognized expression name.")
+    | Expr (Symbol "=", [x; y]) -> 
+        Printf.printf "replace all %s with %s\n" (expr_to_string (ast_to_expr x)) (expr_to_string (ast_to_expr y));
+        replace_all vc (ast_to_expr x) (ast_to_expr y)
+    | Expr (Symbol "return", [e]) ->
+        Printf.printf "replace all \"\\result\" with \"%s\"\n" (expr_to_string (ast_to_expr e));
+        let output = replace_all vc Result (ast_to_expr e) in
+        print_endline (prop_to_string output);
+        output
     | _ -> failwith "Veritas: Error: a statement was not an expression."
 
-let generate_weakest_precondition_ensures_clause (_fn : ast) (_requires : clause list) (_ensures: clause) : vc =
-    failwith "TODO"
+let generate_wp_ensures_clause (fn : ast) (_context : ast list) (ensures: clause) : prop =
+    match ensures with
+    | Ensures c -> 
+        (match fn with
+        | Expr (Symbol "function", fn_def :: args :: []) ->
+            (match fn_def with
+            | Expr (Symbol "call", _ :: []) ->
+                c 
+            | Expr (Symbol "call", _ :: _rest) ->
+                (match args with
+                | Expr (Symbol "block", statements) ->
+                    List.fold_right (apply_statement_to_prop) statements c 
+                | _ -> failwith "bad function block structure in generate_wp_ensures_clause")
+            | _ -> failwith "bad function call structure in generate_wp_ensures_clause")
+        | _ -> failwith "bad fn structure in generate_wp_ensures_clause")
+    | _ -> failwith "found a clause in vf.ensures that is not of ensures."
 
 (* Returns a list of all VC's to be proven. *)
 (* Currently, one per "ensures" clause, but in the 
     future, this will be broken up by if statements, etc. *)
-let generate_weakest_precondition (vf : verifiable_function) : vc list =
-    List.map (
-        fun x -> generate_weakest_precondition_ensures_clause (vf.fn) (vf.requires) x
-    ) vf.ensures
+let generate_weakest_preconditions (vf : verifiable_function) : prop list =
+    let precondition : prop =
+        let clauses : prop list = List.map (fun x ->
+            match x with
+            | Requires x' -> x'
+            | _ -> failwith "found a clause in vf.requires that is not of requires."
+            ) vf.requires
+        in
+        match clauses with
+        | [] -> Boolean true
+        | h :: t -> List.fold_left (create_conjunction) h t
+    in
+    List.map (fun x -> 
+        IF 
+        (precondition,
+        generate_wp_ensures_clause vf.fn vf.context x)
+    ) 
+    vf.ensures 

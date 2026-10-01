@@ -23,16 +23,27 @@ freely, subject to the following restrictions:
 *)
 
 let () =
-  if Array.length Sys.argv <> 2 then begin
-    Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0);
-    exit 1
-  end;
+    if Array.length Sys.argv <> 2 then begin
+        Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0);
+        exit 1
+    end;
 
-  Ast.validate_syntax Sys.argv.(1);
+    Ast.validate_syntax Sys.argv.(1);
 
-  let ast = Ast.get_ast Sys.argv.(1) in
-  (* Search for and create a list of all functions with conditions,
-  and their context they have access to.For now, we will assume only 
-  functions can be verified in Julia, given the nature of arguments. *)
-  let func_ctx_list = Ast.get_fn_list_of_program ast in
-  List.iter Ast.print_verifiable_function func_ctx_list
+    let ast = Ast.get_ast Sys.argv.(1) in
+    (* Search for and create a list of all functions with conditions,
+    and their context they have access to.For now, we will assume only 
+    functions can be verified in Julia, given the nature of arguments. *)
+    let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
+    List.iter Ast.print_verifiable_function func_ctx_list;
+
+    print_endline "\n----- VERIFICATION STEPS -----";
+
+    let wp_list : Propositions.prop list =
+        List.concat_map (Wp.generate_weakest_preconditions) func_ctx_list in
+
+    print_endline "\n----- VERIFICATION CONDITIONS -----";
+
+    List.iter (fun x -> print_endline (Propositions.prop_to_string x)) wp_list 
+
+    

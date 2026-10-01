@@ -28,7 +28,7 @@ type ast =
     | String of string
     | Int of int
     | Float of float
-    | Bool of bool
+    | Boolean of bool
 
 let rec ast_of_json (json : Yojson.Safe.t) =
     match json with
@@ -48,7 +48,7 @@ let rec ast_of_json (json : Yojson.Safe.t) =
     | `String s -> Symbol s
     | `Int i -> Int i
     | `Float f -> Float f
-    | `Bool b -> Bool b
+    | `Bool b -> Boolean b
     | _ -> failwith "Unexpected JSON value"
 
 let validate_syntax filename =
@@ -106,7 +106,7 @@ let rec print_ast_node_aux (ast : ast) (indent : string) =
         Printf.printf "%sInt %d\n" indent i
     | Float f ->
         Printf.printf "%sFloat %f\n" indent f
-    | Bool b ->
+    | Boolean b ->
         Printf.printf "%sBool %b\n" indent b
 
 let print_ast_node (ast : ast) = print_ast_node_aux ast ""
@@ -116,13 +116,13 @@ let print_verifiable_function (f : verifiable_function) =
     List.iter (fun x -> 
         Printf.printf "Requires:\n"; 
         match x with 
-        | (Requires y) -> print_proposition y 
+        | (Requires y) -> print_endline (prop_to_string y)
         | _ -> print_endline "  error reading requires value.") 
         f.requires;
     List.iter (fun x -> 
         Printf.printf "Ensures:\n"; 
         match x with 
-        | (Ensures y) -> print_proposition y 
+        | (Ensures y) -> print_endline (prop_to_string y)
         | _ -> print_endline "  error reading ensures value.") 
         f.ensures;
     print_ast_node f.fn
@@ -137,12 +137,16 @@ let rec ast_to_expr (a : ast) : expr =
         | Symbol "*" -> Propositions.Multiply (ast_to_expr lhs, ast_to_expr rhs)
         | Symbol "/" -> Propositions.Divide (ast_to_expr lhs, ast_to_expr rhs)
         | _ -> failwith "unknown call")
+    | Expr (Symbol "call", [Symbol "__OLD__"; x]) -> Propositions.Old (ast_to_expr x)
+    | Symbol "__RESULT__" -> Propositions.Result
     | Symbol s -> Propositions.Ident s
     | String s -> Propositions.String s
     | Int i -> Propositions.Int i
     | Float f -> Propositions.Float f
-    | Bool b ->  Propositions.Bool b
-    | _ -> failwith "uh oh"
+    | Boolean b ->  Propositions.Boolean b
+    | _ -> 
+        print_ast_node a;
+        failwith "unknown Expr.head that is NOT in the form Symbol \"Call\"."
     
 let ast_to_prop (a : ast) : prop =
     match a with
@@ -160,19 +164,82 @@ let ast_to_prop (a : ast) : prop =
         | _ -> failwith "not a call")
     | _ -> failwith "no ast"
 
+
+(* Returns the highest-level IFF statement *)
+let rec parse_symbol (s : string) (ast_list : ast list) (lhs : ast list) : prop option =
+    match ast_list with
+    | (Symbol s') :: t -> 
+        if s' = s then
+            match lhs, t with
+            | [], [] -> failwith (Printf.sprintf "missing A,B in statement of type A %s B" s)
+            | _, [] -> failwith (Printf.sprintf "missing B in statement of type A %s B" s)
+            | [], _ -> failwith (Printf.sprintf "missing A in statement of type A %s B" s)
+            | [h], [h'] -> 
+                (match s with
+                | "__IFF__" -> Some (IFF (ast_to_prop h, ast_to_prop h'))
+                | "__IMPLIES__" -> Some (IF (ast_to_prop h, ast_to_prop h'))
+                | _ -> failwith "unknown isolated symbol type.")
+            | [h], l' -> 
+                (match s with
+                | "__IFF__" -> Some (IFF (ast_to_prop h, parse_acsl_expr l'))
+                | "__IMPLIES__" -> Some (IF (ast_to_prop h, parse_acsl_expr l'))
+                | _ -> failwith "unknown isolated symbol type.")
+            | l, [h'] -> 
+                (match s with
+                | "__IFF__" -> Some (IFF (parse_acsl_expr l, ast_to_prop h'))
+                | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, ast_to_prop h'))
+                | _ -> failwith "unknown isolated symbol type.")
+            | l, l' -> 
+                (match s with
+                | "__IFF__" -> Some (IFF (parse_acsl_expr l, parse_acsl_expr l'))
+                | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, parse_acsl_expr l'))
+                | _ -> failwith "unknown isolated symbol type.")
+        else parse_symbol s t (lhs @ [Symbol s'])
+    | h :: t -> parse_symbol s t (lhs @ [h])
+    | _ -> None
+
+and parse_acsl_expr (prop_expr_list : ast list) : prop =
+    match prop_expr_list with
+    | [] -> failwith "No ACSL proposition or compound proposition provided"
+    | [h] -> ast_to_prop h
+    | h -> 
+        match (parse_symbol "__IFF__" h []) with
+        | Some p -> p
+        | None -> 
+            match (parse_symbol "__IMPLIES__" h []) with
+            | Some p' -> p'
+            | None ->
+                let rec print_ast_list (ast_list : ast list) =
+                    match ast_list with
+                    | h' :: t :: [] ->
+                        print_ast_node h';
+                        print_ast_node t
+                    | h' :: t -> 
+                        print_ast_node h';
+                        print_ast_list t
+                    | [] -> 
+                        print_endline "N/A" in
+                print_ast_list h;
+                failwith "Single AST Node ?"
+
+let build_clause (component_list : ast list) : clause =
+    match component_list with
+    | Symbol "requires" :: prop_expr_list ->
+        Requires (parse_acsl_expr prop_expr_list)
+    | Symbol "ensures" :: prop_expr_list ->
+        Ensures (parse_acsl_expr prop_expr_list)
+    | _ -> failwith "malformed clause structure"
+
 let rec get_fn_list_of_block_list (stmt_list : ast list) (context : ast list) (requires : clause list) (ensures : clause list) : (verifiable_function list) =
-    (match stmt_list with
+    match stmt_list with
     | h :: t ->
         (match h with
         | Expr (head, args) ->
             (match head with
             | Symbol "macrocall" ->
                 (match args with
-                | (Symbol "@ACSL") :: (Symbol clause_kind) :: c :: [] -> 
-                    (let new_clause = (match clause_kind with
-                    | "requires" -> Requires (ast_to_prop c)
-                    | "ensures" -> Ensures (ast_to_prop c)
-                    | _ -> failwith (Printf.sprintf "Veritas: Error: unknown ACSL clause type \"%s\"" clause_kind)) in
+                | (Symbol "@ACSL") :: clause_expr_list -> 
+                    (let new_clause = build_clause clause_expr_list in
                     match new_clause with
                     | Requires _ ->
                         get_fn_list_of_block_list t context (requires @ [new_clause]) ensures
@@ -184,7 +251,7 @@ let rec get_fn_list_of_block_list (stmt_list : ast list) (context : ast list) (r
                 get_fn_list_of_block_list t (context @ [h]) [] []
             | _ -> [])
         | _ -> [])
-    | [] -> [])
+    | [] -> []
 
 (* Functions are in the form of (call; arguments) :: () *)
 and extend_verifiable_function_block (fn : ast) (context : ast list) (requires : clause list) (ensures : clause list) : (verifiable_function list) = 

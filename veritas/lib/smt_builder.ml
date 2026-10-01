@@ -22,6 +22,13 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
+open Propositions
+
 let set_logic (x : string) : string = Printf.sprintf "(set-logic %s)" x
 
 let check_sat : string = "(check-sat)"
+
+let convert_prop_to_smtlib (_p : prop) : string =
+    failwith "TODO convert_prop_to_smtlib"
+
+(* let define_const (name : string) (t : type) *)

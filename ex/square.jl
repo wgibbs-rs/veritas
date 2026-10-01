@@ -11,3 +11,14 @@ end
 function squared_positive(x)
     return x * x
 end
+
+# ===== VERIFICATION CONDITIONS =====
+# 1.
+# true ==> __RESULT__ > x
+# true ==> x * x > x
+# UNSAT
+
+# 2.
+# x > 0 ==> __RESULT__ > x
+# x > 0 ==> x * x > 0
+# SAT

@@ -28,75 +28,74 @@ type expr =
     | Subtract of expr * expr
     | Multiply of expr * expr
     | Divide of expr * expr
+    | Old of expr (* ACSL \old keyword *)
+    | Result (* ACSL \result keyword *)
     | Ident of string
     | String of string
     | Int of int
     | Float of float
-    | Bool of bool
+    | Boolean of bool
 
 (* P -> WP(S, Q) *)
 type prop =
+    | Boolean of bool
     | EQ of expr * expr
     | NEQ of expr * expr
     | LT of expr * expr
     | LE of expr * expr
     | GT of expr * expr
     | GE of expr * expr
+    | NOT of prop
+    | AND of prop * prop
+    | OR of prop * prop
+    | IF of prop * prop
+    | IFF of prop * prop
 
-type vc =
-    | VC of prop list * prop
-
-let rec print_expr (e : expr) (indent : string) = 
+let rec expr_to_string (e : expr) : string = 
     match e with
     | Add (lhs, rhs) ->
-        Printf.printf "%s+\n" indent;
-        print_expr lhs (indent ^ "  ");
-        print_expr rhs (indent ^ "  ")
+        Printf.sprintf "(%s + %s)" (expr_to_string lhs) (expr_to_string rhs)
     | Subtract (lhs, rhs) ->
-        Printf.printf "%s+\n" indent;
-        print_expr lhs (indent ^ "  ");
-        print_expr rhs (indent ^ "  ")
+        Printf.sprintf "(%s - %s)" (expr_to_string lhs) (expr_to_string rhs)
     | Multiply (lhs, rhs) ->
-        Printf.printf "%s+\n" indent;
-        print_expr lhs (indent ^ "  ");
-        print_expr rhs (indent ^ "  ")
+        Printf.sprintf "(%s * %s)" (expr_to_string lhs) (expr_to_string rhs)
     | Divide (lhs, rhs) ->
-        Printf.printf "%s+\n" indent;
-        print_expr lhs (indent ^ "  ");
-        print_expr rhs (indent ^ "  ")
-    | Ident s ->
-        Printf.printf "%s%s\n" indent s
-    | String s ->
-        Printf.printf "%s%s\n" indent s
-    | Int i ->
-        Printf.printf "%s%d\n" indent i
-    | Float f ->
-        Printf.printf "%s%f\n" indent f
-    | Bool b ->
-        Printf.printf "%s%b\n" indent b
+        Printf.sprintf "(%s / %s)" (expr_to_string lhs) (expr_to_string rhs)
+    | Old x ->
+        Printf.sprintf "\\old(%s)" (expr_to_string x)
+    | Result ->
+        Printf.sprintf "\\result";
+    | Ident s -> s
+    | String s -> s
+    | Int i -> Printf.sprintf "%d" i
+    | Float f -> Printf.sprintf "%f" f
+    | Boolean b -> Printf.sprintf "%b" b
 
-let print_proposition = function
+let rec prop_to_string (p : prop) : string =
+    match p with
+    | Boolean b ->
+        Printf.sprintf "%b" b
     | EQ (lhs, rhs) ->
-        print_endline "=";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s = %s" (expr_to_string lhs) (expr_to_string rhs)
     | NEQ (lhs, rhs) ->
-        print_endline "!=";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s != %s" (expr_to_string lhs) (expr_to_string rhs)
     | LT (lhs, rhs) ->
-        print_endline "<";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s < %s" (expr_to_string lhs) (expr_to_string rhs)
     | LE (lhs, rhs) ->
-        print_endline "<=";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s <= %s" (expr_to_string lhs) (expr_to_string rhs)
     | GT (lhs, rhs) ->
-        print_endline ">";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s > %s" (expr_to_string lhs) (expr_to_string rhs)
     | GE (lhs, rhs) ->
-        print_endline ">=";
-        print_expr lhs "  ";
-        print_expr rhs "  "
+        Printf.sprintf "%s >= %s" (expr_to_string lhs) (expr_to_string rhs)
+    | NOT x ->
+        Printf.sprintf "!%s" (prop_to_string x);
+    | AND (lhs, rhs) ->
+        Printf.sprintf "%s /\\ %s" (prop_to_string lhs) (prop_to_string rhs)
+    | OR (lhs, rhs) ->
+        Printf.sprintf "%s \\/ %s" (prop_to_string lhs) (prop_to_string rhs)
+    | IF (lhs, rhs) ->
+        Printf.sprintf "%s ==> %s" (prop_to_string lhs) (prop_to_string rhs)
+    | IFF (lhs, rhs) ->
+        Printf.sprintf "%s <==> %s" (prop_to_string lhs) (prop_to_string rhs)
+
+let create_conjunction (a : prop) (b : prop) : prop = AND (a, b)
