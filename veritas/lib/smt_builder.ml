@@ -24,9 +24,53 @@ freely, subject to the following restrictions:
 
 open Propositions
 
-let set_logic (x : string) : string = Printf.sprintf "(set-logic %s)" x
+let smt2_file (assertions : string) : string =
+    Printf.sprintf "%s\n%s\n%s\n"
+    "
+    (set-option :print-success false)
+    (set-option :produce-models true)
+    "
+    assertions
+    "
+    (check-sat)
+    (exit)
+    "
 
-let check_sat : string = "(check-sat)"
+let rec expr_to_smt2 : expr -> string = function
+    | Add (lhs, rhs) -> 
+        Printf.sprintf "(+ %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | Subtract (lhs, rhs) ->
+        Printf.sprintf "(- %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | Multiply (lhs, rhs) ->
+        Printf.sprintf "(* %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | Divide (lhs, rhs) ->
+        Printf.sprintf "(/ %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | Old x (* ACSL \old keyword *) -> 
+        (* Assume \old(x) just preserves x during WP. *)
+        Printf.sprintf "(%s)" (expr_to_smt2 x)
+    | Result (* ACSL \result keyword *) -> "ERR" (* Unreachable *)
+    | Ident s -> ("(" ^ s ^ ")")
+    | String s -> ("(" ^ s ^ ")")
+    | Int d -> Printf.sprintf "(%d)" d
+    | Float f -> Printf.sprintf "(%f)" f
+    | Boolean b -> Printf.sprintf "(%b)" b
+
+let rec prop_to_smt2 : prop -> string = function
+    | Boolean b -> Printf.sprintf "(%b)" b
+    | EQ (lhs, rhs) -> Printf.sprintf "(= %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | NEQ (lhs, rhs) -> Printf.sprintf "(!= %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | LT (lhs, rhs) -> Printf.sprintf "(< %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | LE (lhs, rhs) -> Printf.sprintf "(<= %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | GT (lhs, rhs) -> Printf.sprintf "(> %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | GE (lhs, rhs) -> Printf.sprintf "(>= %s %s)" (expr_to_smt2 lhs) (expr_to_smt2 rhs)
+    | NOT p -> Printf.sprintf "(not %s)" (prop_to_smt2 p)
+    | AND (lhs, rhs) -> Printf.sprintf "(and %s %s)" (prop_to_smt2 lhs) (prop_to_smt2 rhs)
+    | OR (lhs, rhs) -> Printf.sprintf "(or %s %s)" (prop_to_smt2 lhs) (prop_to_smt2 rhs)
+    | IF (lhs, rhs) -> Printf.sprintf "(=> %s %s)" (prop_to_smt2 lhs) (prop_to_smt2 rhs)
+    | IFF (lhs, rhs) -> Printf.sprintf "(= %s %s)" (prop_to_smt2 lhs) (prop_to_smt2 rhs)
+
+let define_const (name : string) (kind : string) : string = 
+    Printf.sprintf "(define-const %s %s)" name kind
 
 let convert_prop_to_smtlib (_p : prop) : string =
     failwith "TODO convert_prop_to_smtlib"

@@ -1,5 +1,6 @@
 
-#@ ensures x == x
+#@ ensures x < \old(x)
+#@ ensures \result > x
 function math(x)
     y = x + 3
     x = x - 1
