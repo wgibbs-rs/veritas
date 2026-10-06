@@ -25,10 +25,16 @@ freely, subject to the following restrictions:
 open Propositions
 open Ast
 
-let replace_e_e (e : expr) (x : expr) (y : expr) : expr =
-    if e = x then y else e
+(* Does not replace values within \old() *)
+let rec replace_e_e (e : acsl_expr) (x : acsl_expr) (y : acsl_expr) : acsl_expr =
+    match e with
+    | ACSL_Add (lhs, rhs) -> ACSL_Add (replace_e_e lhs x y, replace_e_e rhs x y)
+    | ACSL_Subtract (lhs, rhs) -> ACSL_Subtract (replace_e_e lhs x y, replace_e_e rhs x y)
+    | ACSL_Multiply (lhs, rhs) -> ACSL_Multiply (replace_e_e lhs x y, replace_e_e rhs x y)
+    | ACSL_Divide (lhs, rhs) -> ACSL_Divide (replace_e_e lhs x y, replace_e_e rhs x y)
+    | _ -> if e = x then y else e
 
-let rec replace_all (p : prop) (x : expr) (y : expr) : prop =
+let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
     match p with
     | Boolean _ -> p
     | EQ (lhs, rhs) -> EQ (replace_e_e lhs x y, replace_e_e rhs x y)
@@ -43,35 +49,26 @@ let rec replace_all (p : prop) (x : expr) (y : expr) : prop =
     | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)
     | IFF (lhs, rhs) -> IFF (replace_all lhs x y, replace_all rhs x y)
 
-let apply_statement_to_prop (statement : ast) (vc : prop) : prop =
+let apply_statement_to_prop (statement : jast) (vc : prop) : prop =
     print_endline (prop_to_string vc);
     match statement with
-    | Expr (Symbol "=", [x; y]) -> 
-        Printf.printf "replace all %s with %s\n" (expr_to_string (ast_to_expr x)) (expr_to_string (ast_to_expr y));
-        replace_all vc (ast_to_expr x) (ast_to_expr y)
-    | Expr (Symbol "return", [e]) ->
-        Printf.printf "replace all \"\\result\" with \"%s\"\n" (expr_to_string (ast_to_expr e));
-        let output = replace_all vc Result (ast_to_expr e) in
+    | Assign (x, y) -> 
+        Printf.printf "replace all x with y\n";
+        replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
+    | Return e ->
+        Printf.printf "replace all \"\\result\" with y\n";
+        let output = replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
         print_endline (prop_to_string output);
         output
     | _ -> failwith "Veritas: Error: a statement was not an expression."
 
-let generate_wp_ensures_clause (fn : ast) (_context : ast list) (ensures: clause) : prop =
-    match ensures with
-    | Ensures c -> 
-        (match fn with
-        | Expr (Symbol "function", fn_def :: args :: []) ->
-            (match fn_def with
-            | Expr (Symbol "call", _ :: []) ->
-                c 
-            | Expr (Symbol "call", _ :: _rest) ->
-                (match args with
-                | Expr (Symbol "block", statements) ->
-                    List.fold_right (apply_statement_to_prop) statements c 
-                | _ -> failwith "bad function block structure in generate_wp_ensures_clause")
-            | _ -> failwith "bad function call structure in generate_wp_ensures_clause")
-        | _ -> failwith "bad fn structure in generate_wp_ensures_clause")
-    | _ -> failwith "found a clause in vf.ensures that is not of ensures."
+let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clause) : prop =
+    match ensures, fn with
+    | Ensures c, Function (_, _, args, stmts) -> 
+        (match args with
+        | [] -> c 
+        | _ -> List.fold_right (apply_statement_to_prop) stmts c)
+    | _, _ -> failwith "found a clause in vf.ensures that is not of ensures."
 
 (* Returns a list of all VC's to be proven. *)
 (* Currently, one per "ensures" clause, but in the 
