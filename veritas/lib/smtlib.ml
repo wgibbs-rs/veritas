@@ -25,10 +25,6 @@ freely, subject to the following restrictions:
 open Propositions
 open Ast
 
-type smtlib2_result =
-    | SAT of string
-    | UNSAT of string
-
 let check_smtlib2_string input =
     let ic = Unix.open_process_in ("echo " ^ Filename.quote input ^ " | z3 -in") in
     let output = In_channel.input_all ic in

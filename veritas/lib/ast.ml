@@ -57,6 +57,8 @@ type jast =
     | Toplevel of jast list
     | ACSL of clause
     | Function of string * jvar * jvar list * jast list 
+    | If of jexpr * jast list
+    | IfElse of jexpr * jast list * jast list
     | Assign of jvar * jexpr
     | Return of jexpr
 
@@ -76,27 +78,6 @@ type verifiable_function = {
     fn: jast;
 }
 
-let rec print_jsast_node_aux (ast : julia_syntax_ast) (indent : string) =
-    match ast with
-    | JSExpr (head, args) ->
-        Printf.printf "%sExpr:\n" indent;
-        Printf.printf "%shead:\n" (indent ^ "  ");
-        print_jsast_node_aux (head) (indent ^ "    ");
-        Printf.printf "%sargs:\n" (indent ^ "  ");
-        List.iter (fun x -> print_jsast_node_aux x (indent ^ "    ")) args
-    | JSSymbol s ->
-        Printf.printf "%sSymbol %s\n" indent s
-    | JSString s ->
-        Printf.printf "%sString %s\n" indent s
-    | JSInt i ->
-        Printf.printf "%sInt %d\n" indent i
-    | JSFloat f ->
-        Printf.printf "%sFloat %f\n" indent f
-    | JSBool b ->
-        Printf.printf "%sBool %b\n" indent b
-
-let print_jsast_node (ast : julia_syntax_ast) = print_jsast_node_aux ast ""
-
 let jvar_name : jvar -> string = function
     | JAny s
     | JInt64 s
@@ -105,8 +86,14 @@ let jvar_name : jvar -> string = function
     | JBool s
     -> s
 
-let jvar_to_acsl_expr : jvar -> acsl_expr = 
-    fun x -> ACSL_Ident (jvar_name x)
+let jvar_to_string : jvar -> string = function
+    | JAny s -> Printf.sprintf "%s::Any" s 
+    | JInt64 s -> Printf.sprintf "%s::Int64" s 
+    | JFloat64 s -> Printf.sprintf "%s::Float64" s 
+    | JString s -> Printf.sprintf "%s::String" s 
+    | JBool s -> Printf.sprintf "%s::Bool" s 
+
+let jvar_to_acsl_expr : jvar -> acsl_expr = fun x -> ACSL_Ident (jvar_name x)
 
 let rec jexpr_to_acsl_expr : jexpr -> acsl_expr = function
     | Add (lhs, rhs) -> ACSL_Add (jexpr_to_acsl_expr lhs, jexpr_to_acsl_expr rhs)
@@ -315,6 +302,9 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
         | _ -> failwith "unexpected function structure; bad call")
     | JSExpr (JSSymbol "=", [lhs; rhs]) ->
         Assign (jsast_to_jvar lhs, jsast_to_jexpr rhs)
+    | JSExpr (JSSymbol "if", 
+        [condition; JSExpr (JSSymbol "block", stmts)]) ->
+            If (jsast_to_jexpr condition, List.map (jsast_to_jast) stmts)
     | JSExpr (JSSymbol "return", [e]) ->
         Return (jsast_to_jexpr e)
     | _ -> failwith "unknown JuliaSyntax AST structure, or used disallowed Julia feature(s)."
@@ -355,77 +345,6 @@ let get_json_ast filename =
 
 let get_ast filename : jast =
     jsast_to_jast (ast_of_json (Yojson.Safe.from_string (get_json_ast filename)))
-
-let jvar_to_string : jvar -> string = function
-    | JAny s -> Printf.sprintf "%s::Any" s 
-    | JInt64 s -> Printf.sprintf "%s::Int64" s 
-    | JFloat64 s -> Printf.sprintf "%s::Float64" s 
-    | JString s -> Printf.sprintf "%s::String" s 
-    | JBool s -> Printf.sprintf "%s::Bool" s 
-
-let rec print_jexpr (expr : jexpr) (indent : string) =
-    let print_node_and_dual_children indent node lhs rhs =
-        Printf.printf "%s%s\n" indent node;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ") in
-    match expr with
-    | Add (lhs, rhs) -> print_node_and_dual_children indent "+" lhs rhs
-    | Subtract (lhs, rhs) -> print_node_and_dual_children indent "-" lhs rhs
-    | Multiply (lhs, rhs) -> print_node_and_dual_children indent "*" lhs rhs
-    | Divide (lhs, rhs) -> print_node_and_dual_children indent "/" lhs rhs
-    | EQ (lhs, rhs) -> print_node_and_dual_children indent "==" lhs rhs
-    | NEQ (lhs, rhs) -> print_node_and_dual_children indent "!=" lhs rhs
-    | LT (lhs, rhs) -> print_node_and_dual_children indent "<" lhs rhs
-    | LE (lhs, rhs) -> print_node_and_dual_children indent "<=" lhs rhs
-    | GT (lhs, rhs) -> print_node_and_dual_children indent ">" lhs rhs
-    | GE (lhs, rhs) -> print_node_and_dual_children indent ">=" lhs rhs
-    | NOT x -> 
-        Printf.printf "%sNot\n" indent;
-        print_jexpr x (indent ^ "  ")
-    | Ident s -> 
-        Printf.printf "%sIdent\n" indent;
-        Printf.printf "%s%s\n" (indent ^ "  ") (jvar_to_string s);
-    | String s -> Printf.printf "%sString \n%s%s\n" indent (indent ^ "  ") s
-    | Integer d -> Printf.printf "%sInt %d\n" indent d
-    | Float f -> Printf.printf "%sFloat %f\n" indent f
-    | Bool b -> Printf.printf "%sBool %b\n" indent b
-
-let rec print_jast_aux (ast : jast) (indent : string) =
-    (match ast with
-    | Toplevel tree ->
-        Printf.printf "%sToplevel:\n" indent;
-        List.iter (fun x -> print_jast_aux x (indent ^ "  ")) tree
-    | ACSL _ -> failwith "ACSL clause in general AST"
-    | Function (_, kind, args, stmts) -> (* of string * jvar * jvar list * jast list *)
-        Printf.printf "%sFunction %s =\n" indent (jvar_to_string kind);
-        Printf.printf "%sArgs:\n" (indent ^ "  ");
-        List.iter (fun x -> Printf.printf "%s%s" (indent ^ "    ") (jvar_to_string x)) args;
-        Printf.printf "\n%sStatements:\n" (indent ^ "  ");
-        List.iter (fun x -> print_jast_aux x (indent ^ "    ")) stmts;
-    | Assign (x, y) ->
-        Printf.printf "%s%s =\n" indent (jvar_to_string x);
-        print_jexpr y (indent ^ "  ")
-    | Return (e) ->
-        Printf.printf "%sReturn:\n" indent;
-        print_jexpr e (indent ^ "  "))
-
-let print_jast (ast : jast) = print_jast_aux ast ""
-
-let print_verifiable_function (f : verifiable_function) = 
-    Printf.printf "\n\n=== %s ===\n" f.title;
-    List.iter (fun x -> 
-        Printf.printf "Requires: "; 
-        match x with 
-        | (Requires y) -> print_endline (prop_to_string y)
-        | _ -> print_endline "  error reading requires value.") 
-        f.requires;
-    List.iter (fun x -> 
-        Printf.printf "Ensures: "; 
-        match x with 
-        | (Ensures y) -> print_endline (prop_to_string y)
-        | _ -> print_endline "  error reading ensures value.") 
-        f.ensures;
-    print_jast f.fn
 
 let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) =
     match stmt_list with

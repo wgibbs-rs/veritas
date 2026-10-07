@@ -36,7 +36,7 @@ let () =
     and their context they have access to.For now, we will assume only 
     functions can be verified in Julia, given the nature of arguments. *)
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
-    List.iter Ast.print_verifiable_function func_ctx_list;
+    List.iter Printer.print_verifiable_function func_ctx_list;
 
     print_endline "\n----- VERIFICATION STEPS -----";
 

@@ -1,5 +1,6 @@
 
-#@ ensures \result == x * x
+#@ requires x > 1
+#@ ensures x < \old(x)
 function math(x::Int64)::Int64
     y = x + 3
     x = x - 1
