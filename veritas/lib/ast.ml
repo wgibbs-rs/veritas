@@ -97,25 +97,23 @@ let rec print_jsast_node_aux (ast : julia_syntax_ast) (indent : string) =
 
 let print_jsast_node (ast : julia_syntax_ast) = print_jsast_node_aux ast ""
 
-let jvar_to_acsl_expr : jvar -> acsl_expr = function
-    | JAny s -> ACSL_Ident s
-    | JInt64 s -> ACSL_Ident s
-    | JFloat64 s -> ACSL_Ident s
-    | JString s -> ACSL_Ident s
-    | JBool s -> ACSL_Ident s
+let jvar_name : jvar -> string = function
+    | JAny s
+    | JInt64 s
+    | JFloat64 s
+    | JString s
+    | JBool s
+    -> s
+
+let jvar_to_acsl_expr : jvar -> acsl_expr = 
+    fun x -> ACSL_Ident (jvar_name x)
 
 let rec jexpr_to_acsl_expr : jexpr -> acsl_expr = function
     | Add (lhs, rhs) -> ACSL_Add (jexpr_to_acsl_expr lhs, jexpr_to_acsl_expr rhs)
     | Subtract (lhs, rhs) -> ACSL_Subtract (jexpr_to_acsl_expr lhs, jexpr_to_acsl_expr rhs)
     | Multiply (lhs, rhs) -> ACSL_Multiply (jexpr_to_acsl_expr lhs, jexpr_to_acsl_expr rhs)
     | Divide (lhs, rhs) -> ACSL_Divide (jexpr_to_acsl_expr lhs, jexpr_to_acsl_expr rhs)
-    | Ident x ->
-        (match x with
-        | JAny s -> ACSL_Ident s
-        | JInt64 s -> ACSL_Ident s
-        | JFloat64 s -> ACSL_Ident s
-        | JString s -> ACSL_Ident s
-        | JBool s -> ACSL_Ident s)
+    | Ident x -> jvar_to_acsl_expr x
     | String s -> ACSL_String s
     | Integer d -> ACSL_Int d
     | Float f -> ACSL_Float f
@@ -345,8 +343,7 @@ let validate_syntax filename =
     let ic = Unix.open_process_args_in
         "julia" [| "julia"; "-e"; Bridge.validate_src; filename |] in
     let output = In_channel.input_all ic in
-    let result = Unix.close_process_in ic in
-    if result <> Unix.WEXITED 0 then
+    if (Unix.close_process_in ic) <> Unix.WEXITED 0 then
         print_string output
 
 let get_json_ast filename =
@@ -355,76 +352,43 @@ let get_json_ast filename =
     let output = In_channel.input_all ic in
     let _ = Unix.close_process_in ic in
     output
-    
+
 let get_ast filename : jast =
-    let json_str : string = get_json_ast filename in
-    let jsast = ast_of_json (Yojson.Safe.from_string json_str) in
-    print_jsast_node jsast;
-    jsast_to_jast jsast
+    jsast_to_jast (ast_of_json (Yojson.Safe.from_string (get_json_ast filename)))
 
 let jvar_to_string : jvar -> string = function
-    | JAny s -> s
-    | JInt64 s -> s
-    | JFloat64 s -> s
-    | JString s -> s
-    | JBool s -> s
+    | JAny s -> Printf.sprintf "%s::Any" s 
+    | JInt64 s -> Printf.sprintf "%s::Int64" s 
+    | JFloat64 s -> Printf.sprintf "%s::Float64" s 
+    | JString s -> Printf.sprintf "%s::String" s 
+    | JBool s -> Printf.sprintf "%s::Bool" s 
 
 let rec print_jexpr (expr : jexpr) (indent : string) =
+    let print_node_and_dual_children indent node lhs rhs =
+        Printf.printf "%s%s\n" indent node;
+        print_jexpr lhs (indent ^ "  ");
+        print_jexpr rhs (indent ^ "  ") in
     match expr with
-    | Add (lhs, rhs) -> 
-        Printf.printf "%s+\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | Subtract (lhs, rhs) -> 
-        Printf.printf "%s-\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | Multiply (lhs, rhs) -> 
-        Printf.printf "%s*\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | Divide (lhs, rhs) -> 
-        Printf.printf "%s/\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | EQ (lhs, rhs) -> 
-        Printf.printf "%s==\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | NEQ (lhs, rhs) -> 
-        Printf.printf "%s!=\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | LT (lhs, rhs) -> 
-        Printf.printf "%s<\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | LE (lhs, rhs) -> 
-        Printf.printf "%s<=\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | GT (lhs, rhs) -> 
-        Printf.printf "%s>\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
-    | GE (lhs, rhs) -> 
-        Printf.printf "%s>=\n" indent;
-        print_jexpr lhs (indent ^ "  ");
-        print_jexpr rhs (indent ^ "  ")
+    | Add (lhs, rhs) -> print_node_and_dual_children indent "+" lhs rhs
+    | Subtract (lhs, rhs) -> print_node_and_dual_children indent "-" lhs rhs
+    | Multiply (lhs, rhs) -> print_node_and_dual_children indent "*" lhs rhs
+    | Divide (lhs, rhs) -> print_node_and_dual_children indent "/" lhs rhs
+    | EQ (lhs, rhs) -> print_node_and_dual_children indent "==" lhs rhs
+    | NEQ (lhs, rhs) -> print_node_and_dual_children indent "!=" lhs rhs
+    | LT (lhs, rhs) -> print_node_and_dual_children indent "<" lhs rhs
+    | LE (lhs, rhs) -> print_node_and_dual_children indent "<=" lhs rhs
+    | GT (lhs, rhs) -> print_node_and_dual_children indent ">" lhs rhs
+    | GE (lhs, rhs) -> print_node_and_dual_children indent ">=" lhs rhs
     | NOT x -> 
         Printf.printf "%sNot\n" indent;
         print_jexpr x (indent ^ "  ")
     | Ident s -> 
         Printf.printf "%sIdent\n" indent;
         Printf.printf "%s%s\n" (indent ^ "  ") (jvar_to_string s);
-    | String s ->
-        Printf.printf "%sString \n%s%s\n" indent (indent ^ "  ") s
-    | Integer d ->
-        Printf.printf "%sInt %d\n" indent d
-    | Float f ->
-        Printf.printf "%sFloat %f\n" indent f
-    | Bool b ->
-        Printf.printf "%sBool %b\n" indent b
+    | String s -> Printf.printf "%sString \n%s%s\n" indent (indent ^ "  ") s
+    | Integer d -> Printf.printf "%sInt %d\n" indent d
+    | Float f -> Printf.printf "%sFloat %f\n" indent f
+    | Bool b -> Printf.printf "%sBool %b\n" indent b
 
 let rec print_jast_aux (ast : jast) (indent : string) =
     (match ast with
@@ -450,13 +414,13 @@ let print_jast (ast : jast) = print_jast_aux ast ""
 let print_verifiable_function (f : verifiable_function) = 
     Printf.printf "\n\n=== %s ===\n" f.title;
     List.iter (fun x -> 
-        Printf.printf "Requires:\n"; 
+        Printf.printf "Requires: "; 
         match x with 
         | (Requires y) -> print_endline (prop_to_string y)
         | _ -> print_endline "  error reading requires value.") 
         f.requires;
     List.iter (fun x -> 
-        Printf.printf "Ensures:\n"; 
+        Printf.printf "Ensures: "; 
         match x with 
         | (Ensures y) -> print_endline (prop_to_string y)
         | _ -> print_endline "  error reading ensures value.") 
@@ -469,10 +433,8 @@ let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) 
         (match h with
         | ACSL c ->
             (match c with
-            | Requires _ ->
-                get_fn_list_of_block_list t context (requires @ [c]) ensures
-            | Ensures _ ->
-                get_fn_list_of_block_list t context requires (ensures @ [c]))
+            | Requires _ -> get_fn_list_of_block_list t context (requires @ [c]) ensures
+            | Ensures _ -> get_fn_list_of_block_list t context requires (ensures @ [c]))
         | Function (_, kind, args, _stmts) ->
             (extend_verifiable_function_block h context requires ensures) @
             get_fn_list_of_block_list t (context @ kind :: args) [] []
@@ -492,8 +454,14 @@ and extend_verifiable_function_block (fn : jast) (context : jvar list) (requires
 (* For each branch of the AST, we test if it is a function, *)
 and get_fn_list_of_program_aux (ast' : jast) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) = 
     match ast' with
-    | Toplevel stmts ->
-        get_fn_list_of_block_list stmts context requires ensures
+    | Toplevel stmts -> get_fn_list_of_block_list stmts context requires ensures
     | _ -> []
 
 let get_fn_list_of_program (ast' : jast) : verifiable_function list = get_fn_list_of_program_aux ast' [] [] []
+
+let rec remove_jvar_duplicates (l : jvar list) (m : jvar list) : jvar list =
+    match l, m with
+    | [], [] -> []
+    | [], _ -> m
+    | _, [] -> l
+    | h :: t, h' :: t' -> h :: h' :: (remove_jvar_duplicates t t')

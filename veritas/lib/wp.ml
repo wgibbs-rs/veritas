@@ -75,19 +75,13 @@ let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clau
     future, this will be broken up by if statements, etc. *)
 let generate_weakest_preconditions (vf : verifiable_function) : prop list =
     let precondition : prop =
-        let clauses : prop list = List.map (fun x ->
-            match x with
+        let clauses : prop list = List.map (function
             | Requires x' -> x'
             | _ -> failwith "found a clause in vf.requires that is not of requires."
-            ) vf.requires
-        in
+            ) vf.requires in
         match clauses with
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
-    List.map (fun x -> 
-        IF 
-        (precondition,
-        generate_wp_ensures_clause vf.fn vf.context x)
-    ) 
+    List.map (fun x -> IF (precondition, generate_wp_ensures_clause vf.fn vf.context x)) 
     vf.ensures 

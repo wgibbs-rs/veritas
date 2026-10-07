@@ -1,14 +1,15 @@
 
 #@ ensures \result > x
 # UNSAT
-function squared(x)
+function squared(x::Int64)::Int64
     return x * x
 end
 
-#@ requires x > 0
+#@ requires x < 10
+#@ requires x > 1
 #@ ensures \result > x
 # SAT
-function squared_positive(x)
+function squared_positive(x::Int64)::Int64
     return x * x
 end
 

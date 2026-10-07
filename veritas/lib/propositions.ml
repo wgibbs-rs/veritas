@@ -22,7 +22,6 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
-
 type acsl_expr =
     | ACSL_Add of acsl_expr * acsl_expr
     | ACSL_Subtract of acsl_expr * acsl_expr
@@ -61,12 +60,9 @@ let rec acsl_expr_to_string (e : acsl_expr) : string =
         Printf.sprintf "(%s * %s)" (acsl_expr_to_string lhs) (acsl_expr_to_string rhs)
     | ACSL_Divide (lhs, rhs) ->
         Printf.sprintf "(%s / %s)" (acsl_expr_to_string lhs) (acsl_expr_to_string rhs)
-    | ACSL_Old x ->
-        Printf.sprintf "\\old(%s)" (acsl_expr_to_string x)
-    | ACSL_Result ->
-        Printf.sprintf "\\result";
-    | ACSL_Ident s -> s
-    | ACSL_String s -> s
+    | ACSL_Old x -> Printf.sprintf "\\old(%s)" (acsl_expr_to_string x)
+    | ACSL_Result -> Printf.sprintf "\\result";
+    | ACSL_Ident s | ACSL_String s -> s
     | ACSL_Int i -> Printf.sprintf "%d" i
     | ACSL_Float f -> Printf.sprintf "%f" f
     | ACSL_Boolean b -> Printf.sprintf "%b" b
@@ -100,4 +96,4 @@ let rec prop_to_string (p : prop) : string =
 
 let create_conjunction (a : prop) (b : prop) : prop = AND (a, b)
 
-let negate_prop (a : prop) : prop = NOT a
+let negate_prop : prop -> prop = fun a -> NOT a

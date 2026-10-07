@@ -31,7 +31,7 @@ let () =
     Ast.validate_syntax Sys.argv.(1);
 
     let ast = Ast.get_ast Sys.argv.(1) in
-    
+
     (* Search for and create a list of all functions with conditions,
     and their context they have access to.For now, we will assume only 
     functions can be verified in Julia, given the nature of arguments. *)
@@ -46,50 +46,44 @@ let () =
     print_endline "\n----- VERIFICATION CONDITIONS -----";
 
     List.iter 
-        (fun x -> List.iter (fun y ->
-            print_endline (Propositions.prop_to_string y)) x)
-        wp_list;
+        (fun x -> List.iter (fun y -> 
+            print_endline (Propositions.prop_to_string y)) x) wp_list;
 
     print_endline "\n----- SMT-LIB GENERATION -----\n";
 
-    let defined_consts : string list =
-        List.map 
-        (fun (x : Ast.verifiable_function) -> Smtlib.jvar_to_smtlib x.context) 
-        func_ctx_list in
-
-    List.iter (fun x -> print_string x) defined_consts;
-    
     let wp_list_negated = List.map (fun x -> (List.map Propositions.negate_prop x)) wp_list in
 
-    let _smtlib_sections : string list list = 
-        List.map2 
-        (fun 
-        (i : Propositions.prop list)
-        (j : Ast.verifiable_function) -> 
-            List.map (fun a ->
-                print_endline (Smtlib.prop_to_smtlib a j.context);
-                Smtlib.prop_to_smtlib a j.context
-            ) i
-        ) 
-        (wp_list_negated)
-        (func_ctx_list) in
+    let context =
+        List.concat (List.map (fun (vf : Ast.verifiable_function) -> vf.context) func_ctx_list)
+        |> List.sort_uniq compare in
 
-    let input = "(exit)" in
+    let defined_consts : string = Smtlib.jvar_to_smtlib context in
 
-    let ctx = Z3.mk_context [] in
+    let smtlib_sections : string list = 
+        List.map
+        (fun (i : Propositions.prop list) -> 
+            Smtlib.smt2_section (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i))
+        )
+        wp_list_negated in
+    
+    let smtlib_sections_combined = String.concat "" smtlib_sections in
 
-    let solver = Z3.Solver.mk_solver ctx None in
+    let input = Smtlib.smt2_file (defined_consts ^ smtlib_sections_combined) in
 
-    Z3.Solver.add solver (
-        Z3.AST.ASTVector.to_expr_list 
-        (Z3.SMT.parse_smtlib2_string ctx input [] [] [] [])
-    );
+    print_endline input;
+    
+    let result_flipped = 
+        String.split_on_char '\n' (Smtlib.check_smtlib2_string input)
+        |> List.filter (fun s -> s <> "") in
 
-    match Z3.Solver.check solver [] with
-    | Z3.Solver.SATISFIABLE ->
-        let _model = Z3.Solver.get_model solver in
-        print_endline "SAT"
-    | Z3.Solver.UNSATISFIABLE ->
-        print_endline "UNSAT"
-    | Z3.Solver.UNKNOWN ->
-        print_endline "UNKNOWN"
+    let result = List.map ( fun x ->
+        match x with
+        | "sat" -> "UNSAT"
+        | "unsat" -> "SAT"
+        | _ -> "ERR"
+    ) result_flipped in
+
+    let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
+
+    List.iter2 (fun (x : string) (y : string) ->
+        Printf.printf "%s: %s\n" x y) vf_names result
