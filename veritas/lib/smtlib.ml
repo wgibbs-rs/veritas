@@ -31,15 +31,20 @@ let check_smtlib2_string input =
     let _ = Unix.close_process_in ic in
     output
 
-let smt2_file (assertions : string) : string =
-    Printf.sprintf "%s\n%s\n%s\n%s\n\n"
+let smt2_file : string -> string = fun assertions ->
+    Printf.sprintf "%s\n%s\n%s\n%s\n"
     "(set-option :print-success false)"
     "(set-option :produce-models true)"
     assertions
     "(exit)"
 
-let smt2_section (content : string) : string =
-    Printf.sprintf "\n%s\n%s\n%s\n%s\n" "(push)" content "(check-sat)" "(pop)"
+let smt2_section (content : string) (title : string) : string =
+    Printf.sprintf "; %s\n%s\n%s\n%s\n%s\n\n" 
+    title
+    "(push)" 
+    content 
+    "(check-sat)"
+    "(pop)"
 
 let rec acsl_expr_to_smt2 (e : acsl_expr) (v : jvar list) : string =
     match e with

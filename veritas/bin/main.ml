@@ -59,31 +59,36 @@ let () =
 
     let defined_consts : string = Smtlib.jvar_to_smtlib context in
 
+    let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
+
     let smtlib_sections : string list = 
-        List.map
-        (fun (i : Propositions.prop list) -> 
-            Smtlib.smt2_section (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i))
+        List.map2
+        (fun 
+            (i : Propositions.prop list) 
+            (j : string) -> 
+            Smtlib.smt2_section (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
         )
-        wp_list_negated in
-    
+        wp_list_negated
+        vf_names in
+
     let smtlib_sections_combined = String.concat "" smtlib_sections in
 
     let input = Smtlib.smt2_file (defined_consts ^ smtlib_sections_combined) in
 
     print_endline input;
     
-    let result_flipped = 
+    let z3_outputs = 
         String.split_on_char '\n' (Smtlib.check_smtlib2_string input)
         |> List.filter (fun s -> s <> "") in
 
-    let result = List.map ( fun x ->
-        match x with
+    let result : string list = List.map ( fun x ->
+        (match x with
         | "sat" -> "UNSAT"
         | "unsat" -> "SAT"
-        | _ -> "ERR"
-    ) result_flipped in
+        | _ -> "ERR")
+    ) z3_outputs in
 
-    let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
+    print_endline "===== VERITAS RESULTS =====";
 
     List.iter2 (fun (x : string) (y : string) ->
         Printf.printf "%s: %s\n" x y) vf_names result
