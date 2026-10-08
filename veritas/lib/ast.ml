@@ -105,7 +105,7 @@ let rec jexpr_to_acsl_expr : jexpr -> acsl_expr = function
     | Integer d -> ACSL_Int d
     | Float f -> ACSL_Float f
     | Bool b -> ACSL_Boolean b
-    | _ -> failwith "unexpected expr type in jexpr_to_acsl_expr"
+    | _ -> Error.err "unexpected expr type in jexpr_to_acsl_expr"
 
 let jsexpr_to_jvar (a : julia_syntax_ast) (name : string) : jvar =
     match a with
@@ -113,13 +113,13 @@ let jsexpr_to_jvar (a : julia_syntax_ast) (name : string) : jvar =
         (match kind with
         | "+" | "-" | "*" -> JInt64 name
         | "/" -> JFloat64 name
-        | _ -> failwith "unknown assignment call rhs type")
-    | JSSymbol _s -> failwith "currently unable to assign to a symbol"
+        | _ -> Error.err "unknown assignment call rhs type")
+    | JSSymbol _s -> Error.err "currently unable to assign to a symbol"
     | JSString _s -> JString name
     | JSInt _d -> JInt64 name
     | JSFloat _f -> JFloat64 name
     | JSBool _b -> JBool name
-    | _ -> failwith "unknown expression in assignment"
+    | _ -> Error.err "unknown expression in assignment"
 
 let ast_to_julia_variable (a : julia_syntax_ast) : jvar = 
     match a with
@@ -130,7 +130,7 @@ let ast_to_julia_variable (a : julia_syntax_ast) : jvar =
         (* This is a standard new variable declaration/definition. *)
         (match args with
         | JSExpr (JSSymbol "call", _args) -> jsexpr_to_jvar args x
-        | _ -> failwith "Veritas: Error: unidentified assignment type")
+        | _ -> Error.err "Veritas: Error: unidentified assignment type")
     (* A symbol with a type annotation, x::T . *)
     | JSExpr (JSSymbol "::", [JSSymbol x; JSSymbol kind]) ->
         (match kind with
@@ -138,9 +138,9 @@ let ast_to_julia_variable (a : julia_syntax_ast) : jvar =
         | "Int64" -> JInt64 x
         | "Float64" -> JFloat64 x
         | "Bool" -> JBool x
-        | _ -> failwith ("unknown assigned type \"" ^ kind ^ "\""))
+        | _ -> Error.err ("unknown assigned type \"" ^ kind ^ "\""))
     (* Anything that is not supported. *)
-    | _ -> failwith "unknown variable declaration"
+    | _ -> Error.err "unknown variable declaration"
 
 let rec ast_to_expr (a : julia_syntax_ast) : acsl_expr =
     match a with
@@ -150,7 +150,7 @@ let rec ast_to_expr (a : julia_syntax_ast) : acsl_expr =
         | JSSymbol "-" -> Propositions.ACSL_Subtract (ast_to_expr lhs, ast_to_expr rhs)
         | JSSymbol "*" -> Propositions.ACSL_Multiply (ast_to_expr lhs, ast_to_expr rhs)
         | JSSymbol "/" -> Propositions.ACSL_Divide (ast_to_expr lhs, ast_to_expr rhs)
-        | _ -> failwith "unknown call")
+        | _ -> Error.err "unknown call")
     | JSExpr (JSSymbol "call", [JSSymbol "__OLD__"; x]) -> Propositions.ACSL_Old (ast_to_expr x)
     | JSSymbol "__RESULT__" -> Propositions.ACSL_Result
     | JSSymbol s -> Propositions.ACSL_Ident s
@@ -159,7 +159,7 @@ let rec ast_to_expr (a : julia_syntax_ast) : acsl_expr =
     | JSFloat f -> Propositions.ACSL_Float f
     | JSBool b ->  Propositions.ACSL_Boolean b
     | _ -> 
-        failwith "unknown Expr.head that is NOT in the form Symbol \"Call\"."
+        Error.err "unknown Expr.head that is NOT in the form Symbol \"Call\"."
     
 let ast_to_prop : julia_syntax_ast -> prop = function
     | JSExpr (head, args) ->
@@ -172,9 +172,9 @@ let ast_to_prop : julia_syntax_ast -> prop = function
             | JSSymbol "<=" -> Propositions.LE (ast_to_expr lhs, ast_to_expr rhs)
             | JSSymbol ">" -> Propositions.GT (ast_to_expr lhs, ast_to_expr rhs)
             | JSSymbol ">=" -> Propositions.GE (ast_to_expr lhs, ast_to_expr rhs)
-            | _ -> failwith "bad operation structure")
-        | _ -> failwith "not a call")
-    | _ -> failwith "no ast"
+            | _ -> Error.err "bad operation structure")
+        | _ -> Error.err "not a call")
+    | _ -> Error.err "no ast"
 
 (* Returns the highest-level IFF statement *)
 let rec parse_symbol (s : string) (ast_list : julia_syntax_ast list) (lhs : julia_syntax_ast list) : prop option =
@@ -182,36 +182,36 @@ let rec parse_symbol (s : string) (ast_list : julia_syntax_ast list) (lhs : juli
     | (JSSymbol s') :: t -> 
         if s' = s then
             match lhs, t with
-            | [], [] -> failwith (Printf.sprintf "missing A,B in statement of type A %s B" s)
-            | _, [] -> failwith (Printf.sprintf "missing B in statement of type A %s B" s)
-            | [], _ -> failwith (Printf.sprintf "missing A in statement of type A %s B" s)
+            | [], [] -> Error.err (Printf.sprintf "missing A,B in statement of type A %s B" s)
+            | _, [] -> Error.err (Printf.sprintf "missing B in statement of type A %s B" s)
+            | [], _ -> Error.err (Printf.sprintf "missing A in statement of type A %s B" s)
             | [h], [h'] -> 
                 (match s with
                 | "__IFF__" -> Some (IFF (ast_to_prop h, ast_to_prop h'))
                 | "__IMPLIES__" -> Some (IF (ast_to_prop h, ast_to_prop h'))
-                | _ -> failwith "unknown isolated symbol type.")
+                | _ -> Error.err "unknown isolated symbol type.")
             | [h], l' -> 
                 (match s with
                 | "__IFF__" -> Some (IFF (ast_to_prop h, parse_acsl_expr l'))
                 | "__IMPLIES__" -> Some (IF (ast_to_prop h, parse_acsl_expr l'))
-                | _ -> failwith "unknown isolated symbol type.")
+                | _ -> Error.err "unknown isolated symbol type.")
             | l, [h'] -> 
                 (match s with
                 | "__IFF__" -> Some (IFF (parse_acsl_expr l, ast_to_prop h'))
                 | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, ast_to_prop h'))
-                | _ -> failwith "unknown isolated symbol type.")
+                | _ -> Error.err "unknown isolated symbol type.")
             | l, l' -> 
                 (match s with
                 | "__IFF__" -> Some (IFF (parse_acsl_expr l, parse_acsl_expr l'))
                 | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, parse_acsl_expr l'))
-                | _ -> failwith "unknown isolated symbol type.")
+                | _ -> Error.err "unknown isolated symbol type.")
         else parse_symbol s t (lhs @ [JSSymbol s'])
     | h :: t -> parse_symbol s t (lhs @ [h])
     | _ -> None
 
 and parse_acsl_expr (prop_expr_list : julia_syntax_ast list) : prop =
     match prop_expr_list with
-    | [] -> failwith "No ACSL proposition or compound proposition provided"
+    | [] -> Error.err "No ACSL proposition or compound proposition provided"
     | [h] -> ast_to_prop h
     | h -> 
         match (parse_symbol "__IFF__" h []) with
@@ -220,14 +220,14 @@ and parse_acsl_expr (prop_expr_list : julia_syntax_ast list) : prop =
             match (parse_symbol "__IMPLIES__" h []) with
             | Some p' -> p'
             | None ->
-                failwith "Single AST Node ?"
+                Error.err "Single AST Node ?"
 
 let build_clause : julia_syntax_ast list -> clause = function
     | JSSymbol "requires" :: prop_expr_list ->
         Requires (parse_acsl_expr prop_expr_list)
     | JSSymbol "ensures" :: prop_expr_list ->
         Ensures (parse_acsl_expr prop_expr_list)
-    | _ -> failwith "malformed clause structure"
+    | _ -> Error.err "malformed clause structure"
 
 let str_to_jvar (name : string) (kind : string) : jvar =
     match kind with
@@ -236,12 +236,12 @@ let str_to_jvar (name : string) (kind : string) : jvar =
     | "Float64" -> JFloat64 name
     | "String" -> JString name
     | "Bool" -> JBool name
-    | _ -> failwith ("unexpected type " ^ kind ^ " for function " ^ name ^ ".")
+    | _ -> Error.err ("unexpected type " ^ kind ^ " for function " ^ name ^ ".")
 
 let jsast_to_jvar : julia_syntax_ast -> jvar = function
     | JSSymbol s -> JAny s
     | JSExpr (JSSymbol "::", [JSSymbol name; JSSymbol kind]) -> str_to_jvar name kind
-    | _ -> failwith "unexpected variable declaration syntax"
+    | _ -> Error.err "unexpected variable declaration syntax"
 
 let rec jsast_to_jexpr : julia_syntax_ast -> jexpr = function
     | JSExpr (JSSymbol "call", [JSSymbol op; lhs; rhs]) ->
@@ -256,11 +256,11 @@ let rec jsast_to_jexpr : julia_syntax_ast -> jexpr = function
         | "<=" -> LE (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
         | ">" -> GT (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
         | ">=" -> GE (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | _ -> failwith ("unknown operation: " ^ op ^ "."))
+        | _ -> Error.err ("unknown operation: " ^ op ^ "."))
     | JSSymbol s -> Ident (JAny s)
     | JSInt d -> Integer d
     | JSBool b -> Bool b
-    | _ -> failwith "unexpected JuliaSyntax expr structure"
+    | _ -> Error.err "unexpected JuliaSyntax expr structure"
 
 let rec jsast_to_jast : julia_syntax_ast -> jast = function
     | JSExpr (JSSymbol "toplevel", args) ->
@@ -275,7 +275,7 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
             let fn_name_str = 
                 (match fn_name with
                 | JSSymbol s -> s
-                | _ -> failwith "bad function name structure") in
+                | _ -> Error.err "bad function name structure") in
             Function (
                 fn_name_str,
                 JAny fn_name_str,
@@ -283,14 +283,14 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
                 match block with
                 | JSExpr (JSSymbol "block", args) ->
                     List.map (jsast_to_jast) args
-                | _ -> failwith "unhandled function structure; bad block."
+                | _ -> Error.err "unhandled function structure; bad block."
             )
         | JSExpr (JSSymbol "::", [JSExpr (JSSymbol "call", fn_name :: args); JSSymbol kind]) ->
             (* Used for functions WITH a stated type. *)
             let fn_name_str = 
                 (match fn_name with
                 | JSSymbol s -> s
-                | _ -> failwith "bad function name structure") in
+                | _ -> Error.err "bad function name structure") in
             Function (
                 fn_name_str,
                 str_to_jvar fn_name_str kind,
@@ -298,9 +298,9 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
                 (match block with
                 | JSExpr (JSSymbol "block", args) ->
                     List.map (jsast_to_jast) args
-                | _ -> failwith "unhandled function structure; bad block.")
+                | _ -> Error.err "unhandled function structure; bad block.")
             )
-        | _ -> failwith "unexpected function structure; bad call")
+        | _ -> Error.err "unexpected function structure; bad call")
     | JSExpr (JSSymbol "=", [lhs; rhs]) ->
         Assign (jsast_to_jvar lhs, jsast_to_jexpr rhs)
     | JSExpr (JSSymbol "if", 
@@ -316,7 +316,7 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
                 List.map (jsast_to_jast) else_stmts )
     | JSExpr (JSSymbol "return", [e]) ->
         Return (jsast_to_jexpr e)
-    | _ -> failwith "unknown JuliaSyntax AST structure, or used disallowed Julia feature(s)."
+    | _ -> Error.err "unknown JuliaSyntax AST structure, or used disallowed Julia feature(s)."
 
 let rec ast_of_json (json : Yojson.Safe.t) =
     match json with
@@ -324,19 +324,19 @@ let rec ast_of_json (json : Yojson.Safe.t) =
         let head =
             match List.assoc_opt "head" fields with
             | Some head_json -> ast_of_json head_json
-            | None -> failwith "Expected field 'head'"
+            | None -> Error.err "Expected field 'head'"
         in
         let args =
             match List.assoc_opt "args" fields with
             | Some (`List xs) -> List.map ast_of_json xs
-            | _ -> failwith "Expected list field 'args'"
+            | _ -> Error.err "Expected list field 'args'"
         in
         JSExpr (head, args)
     | `String s -> JSSymbol s
     | `Int i -> JSInt i
     | `Float f -> JSFloat f
     | `Bool b -> JSBool b
-    | _ -> failwith "Unexpected JSON value"
+    | _ -> Error.err "Unexpected JSON value"
 
 let validate_syntax filename =
     let ic = Unix.open_process_args_in
@@ -375,7 +375,7 @@ and extend_verifiable_function_block (fn : jast) (context : jvar list) (requires
     | Function (name, kind, args, stmts) ->
         {requires = requires; ensures = ensures; context = (context @ kind :: args); title = name; fn = fn} ::
         (get_fn_list_of_block_list stmts (context @ kind :: args) [] [])
-    | _ -> failwith "Veritas: Error: not of function in extend_verifiable_function_block"
+    | _ -> Error.err "Veritas: Error: not of function in extend_verifiable_function_block"
 
 (* Steps through all branches, maintaining a context list of accessible information. *)
 (* Returns a list of all functions, including functions within functions. *)

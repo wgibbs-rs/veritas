@@ -97,15 +97,15 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
             print_endline (prop_to_string output) 
         end;
         output
-    | _ -> failwith "Veritas: Error: a statement was not an expression."
+    | _ -> Error.err "Veritas: Error: a statement was not an expression."
 
-let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clause) (debug : bool) : prop =
+let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : prop =
     match ensures, fn with
     | Ensures c, Function (_, _, args, stmts) -> 
         (match args with
         | [] -> c
         | _ -> List.fold_right (fun x acc -> apply_statement_to_prop x acc c debug) stmts c)
-    | _, _ -> failwith "found a clause in vf.ensures that is not of ensures."
+    | _, _ -> Error.err "found a clause in vf.ensures that is not of ensures."
 
 (* Returns a list of all VCs to be proven. *)
 (* Currently, one per "ensures" clause, but in the 
@@ -114,14 +114,14 @@ let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : p
     let precondition : prop =
         let clauses : prop list = List.map (function
             | Requires x' -> x'
-            | _ -> failwith "found a clause in vf.requires that is not of requires."
+            | _ -> Error.err "found a clause in vf.requires that is not of requires."
             ) vf.requires in
         match clauses with
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
     List.map (fun x -> 
-        let conditions = generate_wp_ensures_clause vf.fn vf.context x debug in
+        let conditions = generate_wp_ensures_clause vf.fn x debug in
         IF (precondition, conditions)
     ) 
     vf.ensures 

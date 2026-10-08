@@ -68,7 +68,7 @@ let rec parse_arguments_aux (args : string list) (acc : config) : config =
     | "-smt-out" :: o :: t -> 
         parse_arguments_aux t { acc with smt_out=o }
     | h :: _ -> 
-        print_endline ("unknown argument \"" ^ h ^ "\""); exit 1
+        Error.err ("unknown argument \"" ^ h ^ "\"")
 
 let parse_arguments : config =
     if Array.length Sys.argv < 2 then begin
@@ -78,4 +78,4 @@ let parse_arguments : config =
     then parse_arguments_aux [Sys.argv.(1)] default_config
     else match (Array.to_list Sys.argv) with
     | _ :: _ :: args -> parse_arguments_aux args default_config
-    | _ -> failwith "unknown argument structure"
+    | _ -> Error.err "unknown argument structure"
