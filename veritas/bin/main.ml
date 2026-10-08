@@ -31,39 +31,34 @@ let () =
 
     let ast = Ast.get_ast state.filename in
 
-    (* Search for and create a list of all functions with conditions,
-    and their context they have access to.For now, we will assume only 
-    functions can be verified in Julia, given the nature of arguments. *)
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
 
     if state.debug then begin
         List.iter Printer.print_verifiable_function func_ctx_list;
-        print_endline "\n----- WEAKEST PRECONDITION STEPS -----"
+        print_endline "\n----- WEAKEST PRECONDITION STEPS -----";
     end;
 
     let wp_list : Propositions.prop list list =
         List.map (fun x -> Wp.generate_weakest_preconditions x state.debug) func_ctx_list in
+    
+    let wp_list_negated = 
+        List.map (fun x -> (List.map (Propositions.negate_prop) x)) wp_list in
 
     if state.debug = true then begin
         print_endline "\n----- VERIFICATION CONDITIONS -----";
-
-        List.iter 
-            (fun x -> List.iter (fun y ->  print_endline (Propositions.prop_to_string y)) x) wp_list
+        List.iter (fun x -> 
+            List.iter (
+                fun y -> print_endline (Propositions.prop_to_string y)) x ) wp_list
     end;
 
-    let wp_list_negated = List.map (fun x -> (List.map Propositions.negate_prop x)) wp_list in
-
     let context =
-        List.concat (List.map (fun (vf : Ast.verifiable_function) -> vf.context) func_ctx_list)
+        List.concat_map (fun (vf : Ast.verifiable_function) -> vf.context) func_ctx_list
         |> List.sort_uniq compare in
 
     let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
 
     let smtlib_sections : string list = 
-        List.map2
-        (fun 
-            (i : Propositions.prop list) 
-            (j : string) -> 
+        List.map2 (fun (i : Propositions.prop list) (j : string) -> 
             Smtlib.smt2_section 
                 (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
         )
@@ -84,13 +79,13 @@ let () =
         |> List.filter (fun s -> s <> "") in
 
     let result : string list = List.map ( fun x ->
-        (match x with
+        match x with
         | "sat" -> "UNSAT"
         | "unsat" -> "SAT"
-        | _ -> "ERR")
+        | _ -> "ERR"
     ) z3_outputs in
 
-    print_endline "\n===== VERITAS RESULTS =====";
+    print_endline "\n----- VERITAS RESULTS -----";
 
     List.iter2 (fun (x : string) (y : string) ->
         Printf.printf "%s: %s\n" x y) vf_names result;

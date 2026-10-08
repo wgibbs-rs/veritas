@@ -76,7 +76,6 @@ let parse_arguments : config =
     end;
     if String.starts_with ~prefix:"-" Sys.argv.(1) 
     then parse_arguments_aux [Sys.argv.(1)] default_config
-    else
-    match (Array.to_list Sys.argv) with
+    else match (Array.to_list Sys.argv) with
     | _ :: _ :: args -> parse_arguments_aux args default_config
     | _ -> failwith "unknown argument structure"
