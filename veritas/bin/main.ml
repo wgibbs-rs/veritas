@@ -57,33 +57,41 @@ let () =
 
     let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
 
-    let smtlib_sections : string list = 
-        List.map2 (fun (i : Propositions.prop list) (j : string) -> 
+    let smtlib_sections : string = 
+        String.concat ""
+        (List.map2 (fun (i : Propositions.prop list) (j : string) -> 
             Smtlib.smt2_section 
                 (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
         )
         wp_list_negated
-        vf_names in
+        vf_names) in
 
-    let smtlib_sections_combined = String.concat "" smtlib_sections in
-
-    let g_smt2 = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections_combined) in
+    let g_smt2 = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections) in
 
     if state.debug = true then begin
         print_endline "\n----- SMT-LIB GENERATION -----\n";
         print_endline g_smt2;
     end;
 
-    let z3_outputs = 
-        String.split_on_char '\n' (Smtlib.check_smtlib2_string g_smt2)
-        |> List.filter (fun s -> s <> "") in
+    let z3_output = 
+        (Smtlib.check_smtlib2_string g_smt2) in
 
+    if state.debug = true then begin
+        print_endline "\n----- Z3 OUTPUT -----\n";
+        print_endline z3_output
+    end;
+
+    let z3_outputs_split = 
+        String.split_on_char '\n' z3_output
+        |> List.filter (fun s -> s <> "") in
+    
+    
     let result : string list = List.map ( fun x ->
         match x with
         | "sat" -> "UNSAT"
         | "unsat" -> "SAT"
         | _ -> "ERR"
-    ) z3_outputs in
+    ) z3_outputs_split in
 
     print_endline "\n----- VERITAS RESULTS -----";
 

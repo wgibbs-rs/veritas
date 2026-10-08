@@ -69,12 +69,12 @@ let rec print_jast_aux (ast : jast) (indent : string) =
         print_jexpr y (indent ^ "  ")
     | If (x, y) ->
         Printf.printf "%sIf\n%sCondition\n" indent (indent ^ "  ");
-        print_jexpr x (indent ^ "    ");
+        Printf.printf "%s%s\n" (indent ^ "    ") (prop_to_string x);
         Printf.printf "%sThen\n" (indent ^ "  ");
         List.iter (fun x -> print_jast_aux x (indent ^ "    ")) y
     | IfElse (x, y, z) ->
         Printf.printf "%sIf\n%sCondition\n" indent (indent ^ "  ");
-        print_jexpr x (indent ^ "    ");
+        Printf.printf "%s%s\n" (indent ^ "    ") (prop_to_string x);
         Printf.printf "%sThen\n" (indent ^ "  ");
         List.iter (fun x' -> print_jast_aux x' (indent ^ "    ")) y;
         Printf.printf "%sElse\n" (indent ^ "  ");

@@ -57,8 +57,8 @@ type jast =
     | Toplevel of jast list
     | ACSL of clause
     | Function of string * jvar * jvar list * jast list 
-    | If of jexpr * jast list
-    | IfElse of jexpr * jast list * jast list
+    | If of prop * jast list
+    | IfElse of prop * jast list * jast list
     | Assign of jvar * jexpr
     | Return of jexpr
 
@@ -259,6 +259,7 @@ let rec jsast_to_jexpr : julia_syntax_ast -> jexpr = function
         | _ -> failwith ("unknown operation: " ^ op ^ "."))
     | JSSymbol s -> Ident (JAny s)
     | JSInt d -> Integer d
+    | JSBool b -> Bool b
     | _ -> failwith "unexpected JuliaSyntax expr structure"
 
 let rec jsast_to_jast : julia_syntax_ast -> jast = function
@@ -304,7 +305,15 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
         Assign (jsast_to_jvar lhs, jsast_to_jexpr rhs)
     | JSExpr (JSSymbol "if", 
         [condition; JSExpr (JSSymbol "block", stmts)]) ->
-            If (jsast_to_jexpr condition, List.map (jsast_to_jast) stmts)
+            If (ast_to_prop condition, List.map (jsast_to_jast) stmts)
+    | JSExpr (JSSymbol "if",
+        [condition; 
+        JSExpr (JSSymbol "block", then_stmts); 
+        JSExpr (JSSymbol "block", else_stmts)]) ->
+            IfElse (
+                ast_to_prop condition, 
+                List.map (jsast_to_jast) then_stmts, 
+                List.map (jsast_to_jast) else_stmts )
     | JSExpr (JSSymbol "return", [e]) ->
         Return (jsast_to_jexpr e)
     | _ -> failwith "unknown JuliaSyntax AST structure, or used disallowed Julia feature(s)."

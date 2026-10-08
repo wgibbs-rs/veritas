@@ -49,9 +49,44 @@ let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
     | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)
     | IFF (lhs, rhs) -> IFF (replace_all lhs x y, replace_all rhs x y)
 
-let apply_statement_to_prop (statement : jast) (vc : prop) (debug : bool) : prop =
+let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) (debug : bool) : prop =
     if debug then (print_endline (prop_to_string vc));
     match statement with
+    | If (e, stmts) ->
+        (* condition -> then-block /\ !condition -> not-then-block *)
+        let then_block = 
+            (match stmts with
+            | Return _ :: _ ->
+                (* If the branch ends with a return, then start from nothing. *)
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) stmts ensures
+            | _ ->
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) stmts vc) in
+        let then_block_cond = IF (e, then_block) in
+
+        let else_block_cond = IF (negate_prop e, vc) in
+
+        AND (then_block_cond, else_block_cond)
+    | IfElse (e, then_stmts, else_stmts) ->
+        (* condition -> then-block /\ !condition -> else-block *)
+        let then_block = 
+            (match then_stmts with
+            | Return _ :: _ ->
+                (* If the branch ends with a return, then start from nothing. *)
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) then_stmts ensures
+            | _ ->
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) then_stmts vc) in
+        let then_block_cond = IF (e, then_block) in
+
+        let else_block = 
+            (match else_stmts with
+            | Return _ :: _ ->
+                (* If the branch ends with a return, then start from nothing. *)
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) else_stmts ensures
+            | _ ->
+                List.fold_right (fun x acc -> apply_statement_to_prop x acc ensures debug) else_stmts vc) in
+        let else_block_cond = IF (negate_prop e, else_block) in
+
+        AND (then_block_cond, else_block_cond)
     | Assign (x, y) -> 
         if debug then (Printf.printf "replace all x with y\n");
         replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
@@ -68,11 +103,11 @@ let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clau
     match ensures, fn with
     | Ensures c, Function (_, _, args, stmts) -> 
         (match args with
-        | [] -> c 
-        | _ -> List.fold_right (fun x acc -> apply_statement_to_prop x acc debug) stmts c)
+        | [] -> c
+        | _ -> List.fold_right (fun x acc -> apply_statement_to_prop x acc c debug) stmts c)
     | _, _ -> failwith "found a clause in vf.ensures that is not of ensures."
 
-(* Returns a list of all VC's to be proven. *)
+(* Returns a list of all VCs to be proven. *)
 (* Currently, one per "ensures" clause, but in the 
     future, this will be broken up by if statements, etc. *)
 let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop list =
@@ -85,5 +120,8 @@ let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : p
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
-    List.map (fun x -> IF (precondition, generate_wp_ensures_clause vf.fn vf.context x debug)) 
+    List.map (fun x -> 
+        let conditions = generate_wp_ensures_clause vf.fn vf.context x debug in
+        IF (precondition, conditions)
+    ) 
     vf.ensures 

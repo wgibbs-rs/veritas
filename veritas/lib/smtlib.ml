@@ -59,7 +59,7 @@ let rec acsl_expr_to_smt2 (e : acsl_expr) (v : jvar list) : string =
     | ACSL_Old x (* ACSL \old keyword *) -> 
         (* Assume \old(x) just preserves x during WP. *)
         acsl_expr_to_smt2 x v
-    | ACSL_Result (* ACSL \result keyword *) -> "ERR" (* Unreachable *)
+    | ACSL_Result (* ACSL \result keyword *) -> "__RESULT__" (* Unreachable *)
     | ACSL_Ident s -> s
     | ACSL_String s -> s
     | ACSL_Int d -> Printf.sprintf "((_ int_to_bv 64) %d)" d
@@ -73,7 +73,7 @@ let rec prop_to_smtlib_aux (p : prop) (v : jvar list) : string =
     | EQ (lhs, rhs) -> 
         Printf.sprintf "(= %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
     | NEQ (lhs, rhs) -> 
-        Printf.sprintf "(!= %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
+        Printf.sprintf "(distinct %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
     | LT (lhs, rhs) -> 
         Printf.sprintf "(bvslt %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
     | LE (lhs, rhs) -> 
