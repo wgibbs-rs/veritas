@@ -35,20 +35,21 @@ let () =
     and their context they have access to.For now, we will assume only 
     functions can be verified in Julia, given the nature of arguments. *)
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
-    List.iter Printer.print_verifiable_function func_ctx_list;
 
-    print_endline "\n----- WEAKEST PRECONDITION STEPS -----";
+    if state.debug then begin
+        List.iter Printer.print_verifiable_function func_ctx_list;
+        print_endline "\n----- WEAKEST PRECONDITION STEPS -----"
+    end;
 
     let wp_list : Propositions.prop list list =
-        List.map (Wp.generate_weakest_preconditions) func_ctx_list in
+        List.map (fun x -> Wp.generate_weakest_preconditions x state.debug) func_ctx_list in
 
-    print_endline "\n----- VERIFICATION CONDITIONS -----";
+    if state.debug = true then begin
+        print_endline "\n----- VERIFICATION CONDITIONS -----";
 
-    List.iter 
-        (fun x -> List.iter (fun y -> 
-            print_endline (Propositions.prop_to_string y)) x) wp_list;
-
-    print_endline "\n----- SMT-LIB GENERATION -----\n";
+        List.iter 
+            (fun x -> List.iter (fun y ->  print_endline (Propositions.prop_to_string y)) x) wp_list
+    end;
 
     let wp_list_negated = List.map (fun x -> (List.map Propositions.negate_prop x)) wp_list in
 
@@ -63,19 +64,23 @@ let () =
         (fun 
             (i : Propositions.prop list) 
             (j : string) -> 
-            Smtlib.smt2_section (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
+            Smtlib.smt2_section 
+                (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
         )
         wp_list_negated
         vf_names in
 
     let smtlib_sections_combined = String.concat "" smtlib_sections in
 
-    let input = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections_combined) in
+    let g_smt2 = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections_combined) in
 
-    print_endline input;
-    
+    if state.debug = true then begin
+        print_endline "\n----- SMT-LIB GENERATION -----\n";
+        print_endline g_smt2;
+    end;
+
     let z3_outputs = 
-        String.split_on_char '\n' (Smtlib.check_smtlib2_string input)
+        String.split_on_char '\n' (Smtlib.check_smtlib2_string g_smt2)
         |> List.filter (fun s -> s <> "") in
 
     let result : string list = List.map ( fun x ->
@@ -85,7 +90,9 @@ let () =
         | _ -> "ERR")
     ) z3_outputs in
 
-    print_endline "===== VERITAS RESULTS =====";
+    print_endline "\n===== VERITAS RESULTS =====";
 
     List.iter2 (fun (x : string) (y : string) ->
-        Printf.printf "%s: %s\n" x y) vf_names result
+        Printf.printf "%s: %s\n" x y) vf_names result;
+
+    print_endline ""

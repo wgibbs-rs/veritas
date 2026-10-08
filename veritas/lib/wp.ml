@@ -49,31 +49,33 @@ let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
     | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)
     | IFF (lhs, rhs) -> IFF (replace_all lhs x y, replace_all rhs x y)
 
-let apply_statement_to_prop (statement : jast) (vc : prop) : prop =
-    print_endline (prop_to_string vc);
+let apply_statement_to_prop (statement : jast) (vc : prop) (debug : bool) : prop =
+    if debug then (print_endline (prop_to_string vc));
     match statement with
     | Assign (x, y) -> 
-        Printf.printf "replace all x with y\n";
+        if debug then (Printf.printf "replace all x with y\n");
         replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
     | Return e ->
-        Printf.printf "replace all \"\\result\" with y\n";
         let output = replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
-        print_endline (prop_to_string output);
+        if debug then begin
+            Printf.printf "replace all \"\\result\" with y\n";
+            print_endline (prop_to_string output) 
+        end;
         output
     | _ -> failwith "Veritas: Error: a statement was not an expression."
 
-let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clause) : prop =
+let generate_wp_ensures_clause (fn : jast) (_context : jvar list) (ensures: clause) (debug : bool) : prop =
     match ensures, fn with
     | Ensures c, Function (_, _, args, stmts) -> 
         (match args with
         | [] -> c 
-        | _ -> List.fold_right (apply_statement_to_prop) stmts c)
+        | _ -> List.fold_right (fun x acc -> apply_statement_to_prop x acc debug) stmts c)
     | _, _ -> failwith "found a clause in vf.ensures that is not of ensures."
 
 (* Returns a list of all VC's to be proven. *)
 (* Currently, one per "ensures" clause, but in the 
     future, this will be broken up by if statements, etc. *)
-let generate_weakest_preconditions (vf : verifiable_function) : prop list =
+let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop list =
     let precondition : prop =
         let clauses : prop list = List.map (function
             | Requires x' -> x'
@@ -83,5 +85,5 @@ let generate_weakest_preconditions (vf : verifiable_function) : prop list =
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
-    List.map (fun x -> IF (precondition, generate_wp_ensures_clause vf.fn vf.context x)) 
+    List.map (fun x -> IF (precondition, generate_wp_ensures_clause vf.fn vf.context x debug)) 
     vf.ensures 
