@@ -1,7 +1,7 @@
 """
 ZLib License
 
-Copyright (c) 2025 William Gibbs
+Copyright (c) 2026 William Gibbs
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages

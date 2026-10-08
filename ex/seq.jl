@@ -1,7 +1,8 @@
 
+#@ requires x < 100
 #@ ensures \result > x
 # SAT
-function s(x)
+function s(x::Int64)::Int64
     return x + 1
 end
 

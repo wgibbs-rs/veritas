@@ -1,7 +1,7 @@
 (*
 ZLib License
 
-Copyright (c) 2025 William Gibbs
+Copyright (c) 2026 William Gibbs
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -22,15 +22,14 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
+open Cli
+
 let () =
-    if Array.length Sys.argv <> 2 then begin
-        Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0);
-        exit 1
-    end;
+    let state : config = parse_arguments in
 
-    Ast.validate_syntax Sys.argv.(1);
+    Ast.validate_syntax state.filename;
 
-    let ast = Ast.get_ast Sys.argv.(1) in
+    let ast = Ast.get_ast state.filename in
 
     (* Search for and create a list of all functions with conditions,
     and their context they have access to.For now, we will assume only 
@@ -38,7 +37,7 @@ let () =
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
     List.iter Printer.print_verifiable_function func_ctx_list;
 
-    print_endline "\n----- VERIFICATION STEPS -----";
+    print_endline "\n----- WEAKEST PRECONDITION STEPS -----";
 
     let wp_list : Propositions.prop list list =
         List.map (Wp.generate_weakest_preconditions) func_ctx_list in
@@ -57,8 +56,6 @@ let () =
         List.concat (List.map (fun (vf : Ast.verifiable_function) -> vf.context) func_ctx_list)
         |> List.sort_uniq compare in
 
-    let defined_consts : string = Smtlib.jvar_to_smtlib context in
-
     let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
 
     let smtlib_sections : string list = 
@@ -73,7 +70,7 @@ let () =
 
     let smtlib_sections_combined = String.concat "" smtlib_sections in
 
-    let input = Smtlib.smt2_file (defined_consts ^ smtlib_sections_combined) in
+    let input = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections_combined) in
 
     print_endline input;
     
