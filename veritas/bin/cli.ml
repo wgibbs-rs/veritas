@@ -72,7 +72,7 @@ let rec parse_arguments_aux (args : string list) (acc : config) : config =
 
 let parse_arguments : config =
     if Array.length Sys.argv < 2 then begin
-        Printf.eprintf "Usage: %s <file>\n" Sys.argv.(0); exit 1
+        print_string help_message; exit 0
     end;
     if String.starts_with ~prefix:"-" Sys.argv.(1) 
     then parse_arguments_aux [Sys.argv.(1)] default_config

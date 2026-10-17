@@ -32,6 +32,8 @@ let () =
     let ast = Ast.get_ast state.filename in
 
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
+    (* Quickly eliminate functions that obviously fail. *)
+    let func_ctx_list = List.map (fun x -> Quick_elimination.check_fn x) func_ctx_list in
 
     if state.debug then begin
         List.iter Printer.print_verifiable_function func_ctx_list;
@@ -41,14 +43,14 @@ let () =
     let wp_list : Propositions.prop list list =
         List.map (fun x -> Wp.generate_weakest_preconditions x state.debug) func_ctx_list in
     
-    let wp_list_negated = 
+    let wp_list_negated =
         List.map (fun x -> (List.map (Propositions.negate_prop) x)) wp_list in
 
     if state.debug = true then begin
         print_endline "\n----- VERIFICATION CONDITIONS -----";
-        List.iter (fun x -> 
-            List.iter (
-                fun y -> print_endline (Propositions.prop_to_string y)) x ) wp_list
+        List.iter (fun x ->
+            List.iter (fun y ->
+                print_endline (Propositions.prop_to_string y)) x ) wp_list
     end;
 
     let context =
@@ -57,10 +59,10 @@ let () =
 
     let vf_names = List.map (fun (vf : Ast.verifiable_function) -> vf.title) func_ctx_list in
 
-    let smtlib_sections : string = 
+    let smtlib_sections : string =
         String.concat ""
         (List.map2 (fun (i : Propositions.prop list) (j : string) -> 
-            Smtlib.smt2_section 
+            Smtlib.smt2_section
                 (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
         )
         wp_list_negated
@@ -73,8 +75,7 @@ let () =
         print_endline g_smt2;
     end;
 
-    let z3_output = 
-        (Smtlib.check_smtlib2_string g_smt2) in
+    let z3_output = (Smtlib.check_smtlib2_string g_smt2) in
 
     if state.debug = true then begin
         print_endline "\n----- Z3 OUTPUT -----\n";

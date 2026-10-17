@@ -53,8 +53,9 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
     if debug then (print_endline (prop_to_string vc));
     match statement with
     | If (e, stmts) ->
+        if debug then (Printf.printf "wp(if E then S1 else S2 end, R) = (E -> wp(S1,R)) /\\ (¬E -> wp(S2,R))\n");
         (* condition -> then-block /\ !condition -> not-then-block *)
-        let then_block = 
+        let then_block =
             (match stmts with
             | Return _ :: _ ->
                 (* If the branch ends with a return, then start from nothing. *)
@@ -67,8 +68,9 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
 
         AND (then_block_cond, else_block_cond)
     | IfElse (e, then_stmts, else_stmts) ->
+        if debug then (Printf.printf "wp(if E then S1 else S2 end, R) = (E -> wp(S1,R)) /\\ (¬E -> wp(S2,R))\n");
         (* condition -> then-block /\ !condition -> else-block *)
-        let then_block = 
+        let then_block =
             (match then_stmts with
             | Return _ :: _ ->
                 (* If the branch ends with a return, then start from nothing. *)
@@ -88,14 +90,11 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
 
         AND (then_block_cond, else_block_cond)
     | Assign (x, y) -> 
-        if debug then (Printf.printf "replace all x with y\n");
+        if debug then (Printf.printf "wp(x := E,R) = R[x <- E]\n");
         replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
     | Return e ->
         let output = replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
-        if debug then begin
-            Printf.printf "replace all \"\\result\" with y\n";
-            print_endline (prop_to_string output) 
-        end;
+        if debug then (Printf.printf "wp(x := \\result,R) = R[x <- \\result]\n");
         output
     | _ -> Error.err "Veritas: Error: a statement was not an expression."
 
@@ -108,9 +107,15 @@ let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : pr
     | _, _ -> Error.err "found a clause in vf.ensures that is not of ensures."
 
 (* Returns a list of all VCs to be proven. *)
-(* Currently, one per "ensures" clause, but in the 
+(* Currently, one per "ensures" clause, but in the
     future, this will be broken up by if statements, etc. *)
 let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop list =
+    (* If function was already unsat, simply set the "ensures" clauses to [] to reproduce "UNSAT" *)
+    let vf =
+        if vf.early_unsat
+        then { vf with ensures = [] }
+        else vf
+    in
     let precondition : prop =
         let clauses : prop list = List.map (function
             | Requires x' -> x'
@@ -120,8 +125,8 @@ let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : p
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
-    List.map (fun x -> 
+    List.map (fun x ->
         let conditions = generate_wp_ensures_clause vf.fn x debug in
         IF (precondition, conditions)
-    ) 
-    vf.ensures 
+    )
+    vf.ensures

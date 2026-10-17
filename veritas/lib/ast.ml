@@ -74,8 +74,9 @@ type verifiable_function = {
     requires: clause list; (* List of all ACSL requires clauses. *)
     ensures: clause list; (* List of all ACSL ensures clauses. *)
     context: jvar list; (* A list of context accessible outside of this function. *)
-    title: string;
-    fn: jast;
+    title: string; (* The title of the function. *)
+    fn: jast; (* The function as a jast node. *)
+    early_unsat: bool; (* Whether the function was eliminated as unsat by quick eliminations. *)
 }
 
 let jvar_name : jvar -> string = function
@@ -130,7 +131,7 @@ let ast_to_julia_variable (a : julia_syntax_ast) : jvar =
         (* This is a standard new variable declaration/definition. *)
         (match args with
         | JSExpr (JSSymbol "call", _args) -> jsexpr_to_jvar args x
-        | _ -> Error.err "Veritas: Error: unidentified assignment type")
+        | _ -> Error.err "unidentified assignment type")
     (* A symbol with a type annotation, x::T . *)
     | JSExpr (JSSymbol "::", [JSSymbol x; JSSymbol kind]) ->
         (match kind with
@@ -179,28 +180,28 @@ let ast_to_prop : julia_syntax_ast -> prop = function
 (* Returns the highest-level IFF statement *)
 let rec parse_symbol (s : string) (ast_list : julia_syntax_ast list) (lhs : julia_syntax_ast list) : prop option =
     match ast_list with
-    | (JSSymbol s') :: t -> 
+    | (JSSymbol s') :: t ->
         if s' = s then
             match lhs, t with
             | [], [] -> Error.err (Printf.sprintf "missing A,B in statement of type A %s B" s)
             | _, [] -> Error.err (Printf.sprintf "missing B in statement of type A %s B" s)
             | [], _ -> Error.err (Printf.sprintf "missing A in statement of type A %s B" s)
-            | [h], [h'] -> 
+            | [h], [h'] ->
                 (match s with
                 | "__IFF__" -> Some (IFF (ast_to_prop h, ast_to_prop h'))
                 | "__IMPLIES__" -> Some (IF (ast_to_prop h, ast_to_prop h'))
                 | _ -> Error.err "unknown isolated symbol type.")
-            | [h], l' -> 
+            | [h], l' ->
                 (match s with
                 | "__IFF__" -> Some (IFF (ast_to_prop h, parse_acsl_expr l'))
                 | "__IMPLIES__" -> Some (IF (ast_to_prop h, parse_acsl_expr l'))
                 | _ -> Error.err "unknown isolated symbol type.")
-            | l, [h'] -> 
+            | l, [h'] ->
                 (match s with
                 | "__IFF__" -> Some (IFF (parse_acsl_expr l, ast_to_prop h'))
                 | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, ast_to_prop h'))
                 | _ -> Error.err "unknown isolated symbol type.")
-            | l, l' -> 
+            | l, l' ->
                 (match s with
                 | "__IFF__" -> Some (IFF (parse_acsl_expr l, parse_acsl_expr l'))
                 | "__IMPLIES__" -> Some (IF (parse_acsl_expr l, parse_acsl_expr l'))
@@ -213,10 +214,10 @@ and parse_acsl_expr (prop_expr_list : julia_syntax_ast list) : prop =
     match prop_expr_list with
     | [] -> Error.err "No ACSL proposition or compound proposition provided"
     | [h] -> ast_to_prop h
-    | h -> 
+    | h ->
         match (parse_symbol "__IFF__" h []) with
         | Some p -> p
-        | None -> 
+        | None ->
             match (parse_symbol "__IMPLIES__" h []) with
             | Some p' -> p'
             | None ->
@@ -272,7 +273,7 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
         (match call with
         | JSExpr (JSSymbol "call", fn_name :: args) ->
             (* Used for functions without a stated type. *)
-            let fn_name_str = 
+            let fn_name_str =
                 (match fn_name with
                 | JSSymbol s -> s
                 | _ -> Error.err "bad function name structure") in
@@ -373,7 +374,7 @@ let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) 
 and extend_verifiable_function_block (fn : jast) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) = 
     match fn with
     | Function (name, kind, args, stmts) ->
-        {requires = requires; ensures = ensures; context = (context @ kind :: args); title = name; fn = fn} ::
+        {requires = requires; ensures = ensures; context = (context @ kind :: args); title = name; fn = fn; early_unsat = false} ::
         (get_fn_list_of_block_list stmts (context @ kind :: args) [] [])
     | _ -> Error.err "Veritas: Error: not of function in extend_verifiable_function_block"
 
