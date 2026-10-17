@@ -21,6 +21,7 @@ end
 
 # SAT
 #@ ensures x > 0 ==> \result == true
+#@ ensures x <= 0 ==> \result == false
 function is_positive_if_default(x::Int64)::Bool
     if (x > 0)
         return true

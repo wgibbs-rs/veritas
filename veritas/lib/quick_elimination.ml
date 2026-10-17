@@ -63,12 +63,12 @@ let check_fn (a : verifiable_function) : verifiable_function =
     | Function (_, _, _, _) ->
         let a' =
             if (is_empty_function a.fn) then
-                (print_endline ("NOTE: \"" ^ a.title ^ "\n is empty. No function may be empty.");
+                (print_endline ("NOTE: \"" ^ a.title ^ "\" is empty. No function may be empty.");
                 { a with early_unsat=true })
             else a in
         let a' =
             if (not (guarantees_return a'.fn)) then
-                (print_endline ("NOTE: \"" ^ a'.title ^ "\n does not return. All functions must return.");
+                (print_endline ("NOTE: \"" ^ a'.title ^ "\" does not always return. All functions must return.");
                 { a with early_unsat=true })
             else a in
         a'
