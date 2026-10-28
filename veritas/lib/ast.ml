@@ -23,9 +23,32 @@ freely, subject to the following restrictions:
 *)
 
 open Propositions
+
 type clause =
     | Requires of prop
     | Ensures of prop
+    | Assigns of string list
+    | LoopInvariant of prop
+    | LoopVariant of prop
+    | LoopAssigns of string list
+
+type clause_record = {
+    requires : clause list;
+    ensures : clause list;
+    assigns : clause list;
+    loop_invariant : clause list;
+    loop_variant : clause list;
+    loop_assigns : clause list;
+}
+
+let empty_clause_record : clause_record = {
+    requires = [];
+    ensures = [];
+    assigns = [];
+    loop_invariant = [];
+    loop_variant = [];
+    loop_assigns = [];
+}
 
 (* Stores Julia variables by their name. *)
 type jvar =
@@ -356,37 +379,36 @@ let get_json_ast filename =
 let get_ast filename : jast =
     jsast_to_jast (ast_of_json (Yojson.Safe.from_string (get_json_ast filename)))
 
-let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) =
+let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) (clauses : clause_record) : (verifiable_function list) =
     match stmt_list with
     | h :: t ->
         (match h with
         | ACSL c ->
             (match c with
-            | Requires _ -> get_fn_list_of_block_list t context (requires @ [c]) ensures
-            | Ensures _ -> get_fn_list_of_block_list t context requires (ensures @ [c]))
+            | Requires _ -> get_fn_list_of_block_list t context {clauses with requires = clauses.requires @ [c]}
+            | Ensures _ -> get_fn_list_of_block_list t context {clauses with ensures = clauses.ensures @ [c]}
+            | Assigns _ -> get_fn_list_of_block_list t context {clauses with assigns = clauses.assigns @ [c]}
+            | LoopInvariant _ -> get_fn_list_of_block_list t context {clauses with loop_invariant = clauses.loop_invariant @ [c]}
+            | LoopVariant _ -> get_fn_list_of_block_list t context {clauses with loop_variant = clauses.loop_variant @ [c]}
+            | LoopAssigns _ -> get_fn_list_of_block_list t context {clauses with loop_assigns = clauses.loop_assigns @ [c]})
         | Function (_, kind, args, _stmts) ->
-            (extend_verifiable_function_block h context requires ensures) @
-            get_fn_list_of_block_list t (context @ kind :: args) [] []
+            (add_new_verifiable_function h context clauses) @
+            get_fn_list_of_block_list t (context @ kind :: args) (empty_clause_record)
         | _ -> [])
     | _ -> []
 
-(* Functions are in the form of (call; arguments) :: () *)
-and extend_verifiable_function_block (fn : jast) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) = 
+(* Adds a new function to the list of verifiable functions being constructed. *)
+and add_new_verifiable_function (fn : jast) (context : jvar list) (clauses : clause_record) : (verifiable_function list) = 
     match fn with
     | Function (name, kind, args, stmts) ->
-        {requires = requires; ensures = ensures; context = (context @ kind :: args); title = name; fn = fn; early_unsat = false} ::
-        (get_fn_list_of_block_list stmts (context @ kind :: args) [] [])
-    | _ -> Error.err "Veritas: Error: not of function in extend_verifiable_function_block"
+        {requires = clauses.requires; ensures = clauses.ensures; context = (context @ kind :: args); title = name; fn = fn; early_unsat = false} ::
+        (get_fn_list_of_block_list stmts (context @ kind :: args) (empty_clause_record))
+    | _ -> Error.err "Veritas: Error: not of function in add_new_verifiable_function"
 
-(* Steps through all branches, maintaining a context list of accessible information. *)
-(* Returns a list of all functions, including functions within functions. *)
-(* For each branch of the AST, we test if it is a function, *)
-and get_fn_list_of_program_aux (ast' : jast) (context : jvar list) (requires : clause list) (ensures : clause list) : (verifiable_function list) = 
+let get_fn_list_of_program (ast' : jast) : verifiable_function list = 
     match ast' with
-    | Toplevel stmts -> get_fn_list_of_block_list stmts context requires ensures
+    | Toplevel stmts -> get_fn_list_of_block_list stmts [] (empty_clause_record)
     | _ -> []
-
-let get_fn_list_of_program (ast' : jast) : verifiable_function list = get_fn_list_of_program_aux ast' [] [] []
 
 let rec remove_jvar_duplicates (l : jvar list) (m : jvar list) : jvar list =
     match l, m with
