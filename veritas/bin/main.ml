@@ -89,9 +89,9 @@ let () =
     
     let result : string list = List.map ( fun x ->
         match x with
-        | "sat" -> "UNSAT"
-        | "unsat" -> "SAT"
-        | _ -> "ERR"
+        | "sat" -> "\027[31mUNSAT\027[0m"
+        | "unsat" -> "\027[32mSAT\027[0m"
+        | _ -> "\027[1;33mERR\027[0m"
     ) z3_outputs_split in
 
     print_endline "\n----- VERITAS RESULTS -----";

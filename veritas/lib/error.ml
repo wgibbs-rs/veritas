@@ -23,5 +23,5 @@ freely, subject to the following restrictions:
 *)
 
 let err (e : string) =
-    Printf.printf "Veritas: Error: %s\n" e;
+    Printf.printf "Veritas: \027[31mError:\027[0m %s\n" e;
     exit 1

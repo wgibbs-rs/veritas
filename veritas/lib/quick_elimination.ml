@@ -54,8 +54,6 @@ let is_empty_function : jast -> bool = function
         | _ -> false)
     | _ -> Error.err "not a function in Quick_elimination.is_empty_function"
 
-let early_unsat (x : string) = Printf.printf "Early UNSAT -- %s" x; exit 0
-
 (* This runs all quick elimination checks. *)
 (* If a function is eliminated, a.early_unsat = true. *)
 let check_fn (a : verifiable_function) : verifiable_function =
@@ -63,12 +61,12 @@ let check_fn (a : verifiable_function) : verifiable_function =
     | Function (_, _, _, _) ->
         let a' =
             if (is_empty_function a.fn) then
-                (print_endline ("NOTE: \"" ^ a.title ^ "\" is empty. No function may be empty.");
+                (print_endline ("\027[1;33mNOTE:\027[0m \"" ^ a.title ^ "\" is empty. No function may be empty.");
                 { a with early_unsat=true })
             else a in
         let a' =
             if (not (guarantees_return a'.fn)) then
-                (print_endline ("NOTE: \"" ^ a'.title ^ "\" does not always return. All functions must return.");
+                (print_endline ("\027[1;33mNOTE:\027[0m \"" ^ a'.title ^ "\" does not always return. All functions must return.");
                 { a with early_unsat=true })
             else a in
         a'
