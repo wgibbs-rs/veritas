@@ -41,7 +41,7 @@ type clause_record = {
     loop_assigns : clause list;
 }
 
-let empty_clause_record : clause_record = {
+let empty_clause_record () : clause_record = {
     requires = [];
     ensures = [];
     assigns = [];
@@ -131,41 +131,6 @@ let rec jexpr_to_acsl_expr : jexpr -> acsl_expr = function
     | Bool b -> ACSL_Boolean b
     | _ -> Error.err "unexpected expr type in jexpr_to_acsl_expr"
 
-let jsexpr_to_jvar (a : julia_syntax_ast) (name : string) : jvar =
-    match a with
-    | JSExpr (JSSymbol "call", [JSSymbol kind; _lhs; _rhs]) ->
-        (match kind with
-        | "+" | "-" | "*" -> JInt64 name
-        | "/" -> JFloat64 name
-        | _ -> Error.err "unknown assignment call rhs type")
-    | JSSymbol _s -> Error.err "currently unable to assign to a symbol"
-    | JSString _s -> JString name
-    | JSInt _d -> JInt64 name
-    | JSFloat _f -> JFloat64 name
-    | JSBool _b -> JBool name
-    | _ -> Error.err "unknown expression in assignment"
-
-let ast_to_julia_variable (a : julia_syntax_ast) : jvar = 
-    match a with
-    (* Just a symbol by itself, which we assume is Any *)
-    | JSSymbol x -> JAny x
-    (* An assignment of the form x = y *)
-    | JSExpr (JSSymbol "=", [JSSymbol x; args]) ->
-        (* This is a standard new variable declaration/definition. *)
-        (match args with
-        | JSExpr (JSSymbol "call", _args) -> jsexpr_to_jvar args x
-        | _ -> Error.err "unidentified assignment type")
-    (* A symbol with a type annotation, x::T . *)
-    | JSExpr (JSSymbol "::", [JSSymbol x; JSSymbol kind]) ->
-        (match kind with
-        | "String" -> JString x
-        | "Int64" -> JInt64 x
-        | "Float64" -> JFloat64 x
-        | "Bool" -> JBool x
-        | _ -> Error.err ("unknown assigned type \"" ^ kind ^ "\""))
-    (* Anything that is not supported. *)
-    | _ -> Error.err "unknown variable declaration"
-
 let rec ast_to_expr (a : julia_syntax_ast) : acsl_expr =
     match a with
     | JSExpr (JSSymbol "call", [name; lhs; rhs]) ->
@@ -244,13 +209,22 @@ and parse_acsl_expr (prop_expr_list : julia_syntax_ast list) : prop =
             match (parse_symbol "__IMPLIES__" h []) with
             | Some p' -> p'
             | None ->
-                Error.err "Single AST Node ?"
+                Error.err "malformed implication structure"
 
+(* Builds a new ACSL clause from JuliaSyntax ast. *)
 let build_clause : julia_syntax_ast list -> clause = function
     | JSSymbol "requires" :: prop_expr_list ->
         Requires (parse_acsl_expr prop_expr_list)
     | JSSymbol "ensures" :: prop_expr_list ->
         Ensures (parse_acsl_expr prop_expr_list)
+    | JSSymbol "assigns" :: _prop_expr_list ->
+        Error.err "`assigns` is not supported"
+    | JSSymbol "loop" :: JSSymbol "invariant" :: prop_expr_list ->
+        LoopInvariant (parse_acsl_expr prop_expr_list)
+    | JSSymbol "loop" :: JSSymbol "variant" :: prop_expr_list ->
+        LoopVariant (parse_acsl_expr prop_expr_list)
+    | JSSymbol "loop" :: JSSymbol "assigns" :: _prop_expr_list ->
+        Error.err "`loop assigns` is not supported."
     | _ -> Error.err "malformed clause structure"
 
 let str_to_jvar (name : string) (kind : string) : jvar =
@@ -262,33 +236,33 @@ let str_to_jvar (name : string) (kind : string) : jvar =
     | "Bool" -> JBool name
     | _ -> Error.err ("unexpected type " ^ kind ^ " for function " ^ name ^ ".")
 
-let jsast_to_jvar : julia_syntax_ast -> jvar = function
+let julia_syntax_ast_to_jvar : julia_syntax_ast -> jvar = function
     | JSSymbol s -> JAny s
     | JSExpr (JSSymbol "::", [JSSymbol name; JSSymbol kind]) -> str_to_jvar name kind
     | _ -> Error.err "unexpected variable declaration syntax"
 
-let rec jsast_to_jexpr : julia_syntax_ast -> jexpr = function
+let rec julia_syntax_ast_to_jexpr : julia_syntax_ast -> jexpr = function
     | JSExpr (JSSymbol "call", [JSSymbol op; lhs; rhs]) ->
         (match op with
-        | "+" -> Add (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "-" -> Subtract (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "*" -> Multiply (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "/" -> Divide (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "==" -> EQ (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "!=" -> NEQ (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "<" -> LT (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | "<=" -> LE (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | ">" -> GT (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
-        | ">=" -> GE (jsast_to_jexpr lhs, jsast_to_jexpr rhs)
+        | "+" -> Add (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "-" -> Subtract (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "*" -> Multiply (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "/" -> Divide (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "==" -> EQ (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "!=" -> NEQ (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "<" -> LT (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | "<=" -> LE (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | ">" -> GT (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
+        | ">=" -> GE (julia_syntax_ast_to_jexpr lhs, julia_syntax_ast_to_jexpr rhs)
         | _ -> Error.err ("unknown operation: " ^ op ^ "."))
     | JSSymbol s -> Ident (JAny s)
     | JSInt d -> Integer d
     | JSBool b -> Bool b
     | _ -> Error.err "unexpected JuliaSyntax expr structure"
 
-let rec jsast_to_jast : julia_syntax_ast -> jast = function
+let rec julia_syntax_ast_to_jast : julia_syntax_ast -> jast = function
     | JSExpr (JSSymbol "toplevel", args) ->
-        Toplevel (List.map (jsast_to_jast) args)
+        Toplevel (List.map (julia_syntax_ast_to_jast) args)
     | JSExpr (JSSymbol "macrocall", JSSymbol "@ACSL" :: args) ->
         ACSL (build_clause args)
     | JSExpr (JSSymbol "function", [call; block]) ->
@@ -303,10 +277,10 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
             Function (
                 fn_name_str,
                 JAny fn_name_str,
-                List.map (fun x -> jsast_to_jvar x) args,
+                List.map (fun x -> julia_syntax_ast_to_jvar x) args,
                 match block with
                 | JSExpr (JSSymbol "block", args) ->
-                    List.map (jsast_to_jast) args
+                    List.map (julia_syntax_ast_to_jast) args
                 | _ -> Error.err "unhandled function structure; bad block."
             )
         | JSExpr (JSSymbol "::", [JSExpr (JSSymbol "call", fn_name :: args); JSSymbol kind]) ->
@@ -318,28 +292,28 @@ let rec jsast_to_jast : julia_syntax_ast -> jast = function
             Function (
                 fn_name_str,
                 str_to_jvar fn_name_str kind,
-                List.map (fun x -> jsast_to_jvar x) args,
+                List.map (fun x -> julia_syntax_ast_to_jvar x) args,
                 (match block with
                 | JSExpr (JSSymbol "block", args) ->
-                    List.map (jsast_to_jast) args
+                    List.map (julia_syntax_ast_to_jast) args
                 | _ -> Error.err "unhandled function structure; bad block.")
             )
         | _ -> Error.err "unexpected function structure; bad call")
     | JSExpr (JSSymbol "=", [lhs; rhs]) ->
-        Assign (jsast_to_jvar lhs, jsast_to_jexpr rhs)
+        Assign (julia_syntax_ast_to_jvar lhs, julia_syntax_ast_to_jexpr rhs)
     | JSExpr (JSSymbol "if", 
         [condition; JSExpr (JSSymbol "block", stmts)]) ->
-            If (ast_to_prop condition, List.map (jsast_to_jast) stmts)
+            If (ast_to_prop condition, List.map (julia_syntax_ast_to_jast) stmts)
     | JSExpr (JSSymbol "if",
         [condition; 
         JSExpr (JSSymbol "block", then_stmts); 
         JSExpr (JSSymbol "block", else_stmts)]) ->
             IfElse (
                 ast_to_prop condition, 
-                List.map (jsast_to_jast) then_stmts, 
-                List.map (jsast_to_jast) else_stmts )
+                List.map (julia_syntax_ast_to_jast) then_stmts, 
+                List.map (julia_syntax_ast_to_jast) else_stmts )
     | JSExpr (JSSymbol "return", [e]) ->
-        Return (jsast_to_jexpr e)
+        Return (julia_syntax_ast_to_jexpr e)
     | _ -> Error.err "unknown JuliaSyntax AST structure, or used disallowed Julia feature(s)."
 
 let rec ast_of_json (json : Yojson.Safe.t) =
@@ -369,50 +343,43 @@ let validate_syntax filename =
     if (Unix.close_process_in ic) <> Unix.WEXITED 0 then
         print_string output
 
-let get_json_ast filename =
-    let ic = Unix.open_process_args_in
-        "julia" [| "julia"; "-e"; Bridge.parser_src; filename; "n" |] in
-    let output = In_channel.input_all ic in
-    let _ = Unix.close_process_in ic in
-    output
-
 let get_ast filename : jast =
-    jsast_to_jast (ast_of_json (Yojson.Safe.from_string (get_json_ast filename)))
+    julia_syntax_ast_to_jast (
+        ast_of_json (
+            Yojson.Safe.from_string (
+                let ic = Unix.open_process_args_in
+                    "julia" [| "julia"; "-e"; Bridge.parser_src; filename; "n" |] in
+                let output = In_channel.input_all ic in
+                let _ = Unix.close_process_in ic in
+                output )))
 
-let rec get_fn_list_of_block_list (stmt_list : jast list) (context : jvar list) (clauses : clause_record) : (verifiable_function list) =
+let rec get_verifiable_functions_from_block (stmt_list : jast list) (context : jvar list) (clauses : clause_record) : verifiable_function list =
     match stmt_list with
     | h :: t ->
         (match h with
         | ACSL c ->
             (match c with
-            | Requires _ -> get_fn_list_of_block_list t context {clauses with requires = clauses.requires @ [c]}
-            | Ensures _ -> get_fn_list_of_block_list t context {clauses with ensures = clauses.ensures @ [c]}
-            | Assigns _ -> get_fn_list_of_block_list t context {clauses with assigns = clauses.assigns @ [c]}
-            | LoopInvariant _ -> get_fn_list_of_block_list t context {clauses with loop_invariant = clauses.loop_invariant @ [c]}
-            | LoopVariant _ -> get_fn_list_of_block_list t context {clauses with loop_variant = clauses.loop_variant @ [c]}
-            | LoopAssigns _ -> get_fn_list_of_block_list t context {clauses with loop_assigns = clauses.loop_assigns @ [c]})
+            | Requires _ -> get_verifiable_functions_from_block t context {clauses with requires = clauses.requires @ [c]}
+            | Ensures _ -> get_verifiable_functions_from_block t context {clauses with ensures = clauses.ensures @ [c]}
+            | Assigns _ -> get_verifiable_functions_from_block t context {clauses with assigns = clauses.assigns @ [c]}
+            | LoopInvariant _ -> get_verifiable_functions_from_block t context {clauses with loop_invariant = clauses.loop_invariant @ [c]}
+            | LoopVariant _ -> get_verifiable_functions_from_block t context {clauses with loop_variant = clauses.loop_variant @ [c]}
+            | LoopAssigns _ -> get_verifiable_functions_from_block t context {clauses with loop_assigns = clauses.loop_assigns @ [c]})
         | Function (_, kind, args, _stmts) ->
-            (add_new_verifiable_function h context clauses) @
-            get_fn_list_of_block_list t (context @ kind :: args) (empty_clause_record)
+            let new_verifiable_function = (
+                match h with
+                | Function (name, kind, args, stmts) ->
+                    {requires = clauses.requires; ensures = clauses.ensures; context = (context @ kind :: args); title = name; fn = h; early_unsat = false} ::
+                    (get_verifiable_functions_from_block stmts (context @ kind :: args) (empty_clause_record ()))
+                | _ -> Error.err "not of function in add_new_verifiable_function"
+            ) in
+            new_verifiable_function @
+            get_verifiable_functions_from_block t (context @ kind :: args) (empty_clause_record ())
         | _ -> [])
     | _ -> []
 
-(* Adds a new function to the list of verifiable functions being constructed. *)
-and add_new_verifiable_function (fn : jast) (context : jvar list) (clauses : clause_record) : (verifiable_function list) = 
-    match fn with
-    | Function (name, kind, args, stmts) ->
-        {requires = clauses.requires; ensures = clauses.ensures; context = (context @ kind :: args); title = name; fn = fn; early_unsat = false} ::
-        (get_fn_list_of_block_list stmts (context @ kind :: args) (empty_clause_record))
-    | _ -> Error.err "Veritas: Error: not of function in add_new_verifiable_function"
-
+(* Retrieve all functions in the program that need to be verified. *)
 let get_fn_list_of_program (ast' : jast) : verifiable_function list = 
     match ast' with
-    | Toplevel stmts -> get_fn_list_of_block_list stmts [] (empty_clause_record)
+    | Toplevel stmts -> get_verifiable_functions_from_block stmts [] (empty_clause_record ())
     | _ -> []
-
-let rec remove_jvar_duplicates (l : jvar list) (m : jvar list) : jvar list =
-    match l, m with
-    | [], [] -> []
-    | [], _ -> m
-    | _, [] -> l
-    | h :: t, h' :: t' -> h :: h' :: (remove_jvar_duplicates t t')

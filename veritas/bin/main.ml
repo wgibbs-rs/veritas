@@ -98,5 +98,3 @@ let () =
 
     List.iter2 (fun (x : string) (y : string) ->
         Printf.printf "%s: %s\n" x y) vf_names result;
-
-    print_endline ""
