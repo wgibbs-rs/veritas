@@ -25,28 +25,28 @@ freely, subject to the following restrictions:
 open Cli
 
 let () =
-    let state : config = parse_arguments in
+    let config : config = parse_arguments in
 
-    Ast.validate_syntax state.filename;
+    Ast.validate_syntax config.filename;
 
-    let ast = Ast.get_ast state.filename in
+    let ast = Ast.get_ast config.filename in
 
     let func_ctx_list : Ast.verifiable_function list = Ast.get_fn_list_of_program ast in
     (* Quickly eliminate functions that obviously fail. *)
     let func_ctx_list = List.map (fun x -> Quick_elimination.check_fn x) func_ctx_list in
 
-    if state.debug then begin
+    if config.debug then begin
         List.iter Printer.print_verifiable_function func_ctx_list;
         print_endline "\n----- WEAKEST PRECONDITION STEPS -----";
     end;
 
     let wp_list : Propositions.prop list list =
-        List.map (fun x -> Wp.generate_weakest_preconditions x state.debug) func_ctx_list in
+        List.map (fun x -> Wp.generate_weakest_preconditions x config.debug) func_ctx_list in
     
     let wp_list_negated =
         List.map (fun x -> (List.map (Propositions.negate_prop) x)) wp_list in
 
-    if state.debug = true then begin
+    if config.debug = true then begin
         print_endline "\n----- VERIFICATION CONDITIONS -----";
         List.iter (fun x ->
             List.iter (fun y ->
@@ -70,14 +70,14 @@ let () =
 
     let g_smt2 = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections) in
 
-    if state.debug = true then begin
+    if config.debug = true then begin
         print_endline "\n----- SMT-LIB GENERATION -----\n";
         print_endline g_smt2;
     end;
 
     let z3_output = (Smtlib.check_smtlib2_string g_smt2) in
 
-    if state.debug = true then begin
+    if config.debug = true then begin
         print_endline "\n----- Z3 OUTPUT -----\n";
         print_endline z3_output
     end;

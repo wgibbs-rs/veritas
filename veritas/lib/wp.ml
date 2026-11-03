@@ -110,23 +110,29 @@ let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : pr
 (* Currently, one per "ensures" clause, but in the
     future, this will be broken up by if statements, etc. *)
 let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop list =
-    (* If function was already unsat, simply set the "ensures" clauses to [] to reproduce "UNSAT" *)
-    let vf =
-        if vf.early_unsat
-        then { vf with ensures = [] }
-        else vf
-    in
+    (*  If function was quick eliminated, 
+        we set the "ensures" clauses to [] to reproduce "UNSAT" *)
+    if vf.early_unsat
+    then []
+    else
+    
+    (*  If function has no postcondition contracts,
+        we return a tautology to result in SAT. *)
+    if (List.is_empty vf.ensures)
+    then [Boolean true]
+    else
+
     let precondition : prop =
         let clauses : prop list = List.map (function
             | Requires x' -> x'
             | _ -> Error.err "found a clause in vf.requires that is not of requires."
-            ) vf.requires in
+        ) vf.requires in
         match clauses with
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
     List.map (fun x ->
-        let conditions = generate_wp_ensures_clause vf.fn x debug in
-        IF (precondition, conditions)
+        let postcondition' = generate_wp_ensures_clause vf.fn x debug in
+        IF (precondition, postcondition')
     )
     vf.ensures

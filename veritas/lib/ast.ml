@@ -163,6 +163,7 @@ let ast_to_prop : julia_syntax_ast -> prop = function
             | JSSymbol ">=" -> Propositions.GE (ast_to_expr lhs, ast_to_expr rhs)
             | _ -> Error.err "bad operation structure")
         | _ -> Error.err "not a call")
+    | JSBool b -> Propositions.Boolean b
     | _ -> Error.err "no ast"
 
 (* Returns the highest-level IFF statement *)
