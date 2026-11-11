@@ -3,7 +3,8 @@
 all:
 	@echo "Compiling all dependencies..."
 	@echo "Compiling Maps.v..."
-	@rocq compile -Q Foundation Foundation -noglob Foundation/Maps.v
-	@rm Foundation/*.vok Foundation/*.vos Foundation/.*.aux
+	@rocq compile -Q . Model -noglob Maps.v
+	@rocq compile -Q . Model -noglob Syntax.v
+	@rm *.vok *.vos .*.aux
 clean:
-	rm -f Foundation/*.vo Foundation/*.glob Foundation/*.vos Foundation/*.vok
+	rm -f *.vo *.glob *.vos *.vok
