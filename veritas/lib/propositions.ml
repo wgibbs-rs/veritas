@@ -35,7 +35,6 @@ type acsl_expr =
     | ACSL_Float of float
     | ACSL_Boolean of bool
 
-(* P -> WP(S, Q) *)
 type prop =
     | Boolean of bool
     | EQ of acsl_expr * acsl_expr
