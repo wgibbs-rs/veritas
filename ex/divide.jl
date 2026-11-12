@@ -1,6 +1,5 @@
-@post denominator != 0
-@post divide * denominator == numerator
-function divide(numerator::Number, denominator::Number)
+#@ ensures denominator != 0
+#@ ensures divide * denominator == numerator
+function divide(numerator::Int64, denominator::Int64)::Int64
     return numerator ÷ denominator
 end
-
