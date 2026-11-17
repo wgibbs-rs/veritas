@@ -42,7 +42,7 @@ let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
     | LE (lhs, rhs) -> LE (replace_e_e lhs x y, replace_e_e rhs x y)
     | GT (lhs, rhs) -> GT (replace_e_e lhs x y, replace_e_e rhs x y)
     | GE (lhs, rhs) -> GE (replace_e_e lhs x y, replace_e_e rhs x y)
-    | NOT x' -> NOT (replace_all x' x y)
+    | NOTP x' -> NOTP (replace_all x' x y)
     | AND (lhs, rhs) -> AND (replace_all lhs x y, replace_all rhs x y)
     | OR (lhs, rhs) -> OR (replace_all lhs x y, replace_all rhs x y)
     | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)

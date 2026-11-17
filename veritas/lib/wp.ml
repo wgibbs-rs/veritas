@@ -69,9 +69,8 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
         if debug then (Printf.printf "wp(x := E,R) = R[x <- E]\n");
         Substitution.replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
     | Return e ->
-        let output = Substitution.replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
         if debug then (Printf.printf "wp(x := \\result,R) = R[x <- \\result]\n");
-        output
+        Substitution.replace_all vc ACSL_Result (jexpr_to_acsl_expr e)
     | _ -> Error.err "Veritas: Error: a statement was not an expression."
 
 let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : prop =
@@ -85,17 +84,17 @@ let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : pr
 (* Returns a list of all VCs to be proven. *)
 (* Currently, one per "ensures" clause, but in the
     future, this will be broken up by if statements, etc. *)
-let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop list =
+let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop =
     (*  If function was quick eliminated, 
         we set the "ensures" clauses to [] to reproduce "UNSAT" *)
     if vf.early_unsat
-    then []
+    then Boolean true
     else
     
     (*  If function has no postcondition contracts,
-        we return a tautology to result in SAT. *)
-    if (List.is_empty vf.ensures)
-    then [Boolean true]
+        we show that "are there any counterexamples" is false. *)
+    if List.is_empty vf.ensures
+    then Boolean true
     else
 
     let precondition : prop =
@@ -107,8 +106,14 @@ let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : p
         | [] -> Boolean true
         | h :: t -> List.fold_left (create_conjunction) h t
     in
-    List.map (fun x ->
+
+    let assertions_list = List.map (fun x ->
         let postcondition' = generate_wp_ensures_clause vf.fn x debug in
-        IF (precondition, postcondition')
-    )
-    vf.ensures
+        if (match precondition with (Boolean true) -> true | _ -> false)
+        then IF (precondition, postcondition')
+        else postcondition'
+    ) vf.ensures in
+
+    match assertions_list with
+    | [] -> Boolean false
+    | h :: t -> List.fold_left (fun x y -> OR (x, NOTP y)) (NOTP h) t

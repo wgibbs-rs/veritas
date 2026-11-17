@@ -82,7 +82,7 @@ let rec prop_to_smtlib_aux (p : prop) (v : jvar list) : string =
         Printf.sprintf "(bvsgt %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
     | GE (lhs, rhs) -> 
         Printf.sprintf "(bvsge %s %s)" (acsl_expr_to_smt2 lhs v) (acsl_expr_to_smt2 rhs v)
-    | NOT p -> 
+    | NOTP p -> 
         Printf.sprintf "(not %s)" (prop_to_smtlib_aux p v)
     | AND (lhs, rhs) -> 
         Printf.sprintf "(and %s %s)" (prop_to_smtlib_aux lhs v) (prop_to_smtlib_aux rhs v)

@@ -43,7 +43,7 @@ type prop =
     | LE of acsl_expr * acsl_expr
     | GT of acsl_expr * acsl_expr
     | GE of acsl_expr * acsl_expr
-    | NOT of prop
+    | NOTP of prop
     | AND of prop * prop
     | OR of prop * prop
     | IF of prop * prop
@@ -82,17 +82,17 @@ let rec prop_to_string (p : prop) : string =
         Printf.sprintf "%s > %s" (acsl_expr_to_string lhs) (acsl_expr_to_string rhs)
     | GE (lhs, rhs) ->
         Printf.sprintf "%s >= %s" (acsl_expr_to_string lhs) (acsl_expr_to_string rhs)
-    | NOT x ->
-        Printf.sprintf "!%s" (prop_to_string x);
+    | NOTP x ->
+        Printf.sprintf "!(%s)" (prop_to_string x);
     | AND (lhs, rhs) ->
-        Printf.sprintf "%s /\\ %s" (prop_to_string lhs) (prop_to_string rhs)
+        Printf.sprintf "(%s) /\\ (%s)" (prop_to_string lhs) (prop_to_string rhs)
     | OR (lhs, rhs) ->
-        Printf.sprintf "%s \\/ %s" (prop_to_string lhs) (prop_to_string rhs)
+        Printf.sprintf "(%s) \\/ (%s)" (prop_to_string lhs) (prop_to_string rhs)
     | IF (lhs, rhs) ->
-        Printf.sprintf "%s ==> %s" (prop_to_string lhs) (prop_to_string rhs)
+        Printf.sprintf "(%s) ==> (%s)" (prop_to_string lhs) (prop_to_string rhs)
     | IFF (lhs, rhs) ->
-        Printf.sprintf "%s <==> %s" (prop_to_string lhs) (prop_to_string rhs)
+        Printf.sprintf "(%s) <==> (%s)" (prop_to_string lhs) (prop_to_string rhs)
 
 let create_conjunction (a : prop) (b : prop) : prop = AND (a, b)
 
-let negate_prop : prop -> prop = fun a -> NOT a
+let negate_prop : prop -> prop = fun a -> NOTP a

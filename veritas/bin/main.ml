@@ -40,17 +40,13 @@ let () =
         print_endline "\n----- WEAKEST PRECONDITION STEPS -----";
     end;
 
-    let wp_list : Propositions.prop list list =
+    let wp_list : Propositions.prop list =
         List.map (fun x -> Wp.generate_weakest_preconditions x config.debug) func_ctx_list in
-    
-    let wp_list_negated =
-        List.map (fun x -> (List.map (Propositions.negate_prop) x)) wp_list in
 
     if config.debug = true then begin
         print_endline "\n----- VERIFICATION CONDITIONS -----";
         List.iter (fun x ->
-            List.iter (fun y ->
-                print_endline (Propositions.prop_to_string y)) x ) wp_list
+            print_endline (Propositions.prop_to_string x)) wp_list
     end;
 
     let context =
@@ -61,17 +57,17 @@ let () =
 
     let smtlib_sections : string =
         String.concat ""
-        (List.map2 (fun (i : Propositions.prop list) (j : string) -> 
+        (List.map2 (fun (i : Propositions.prop) (j : string) -> 
             Smtlib.smt2_section
-                (String.concat "" (List.map (fun a -> Smtlib.prop_to_smtlib a context) i)) j
+                (Smtlib.prop_to_smtlib i context) j
         )
-        wp_list_negated
+        wp_list
         vf_names) in
 
     let g_smt2 = Smtlib.smt2_file ((Smtlib.jvar_to_smtlib context) ^ smtlib_sections) in
 
     if config.debug = true then begin
-        print_endline "\n----- SMT-LIB GENERATION -----\n";
+        print_endline "\n----- GENERATED SMT-LIB -----\n";
         print_endline g_smt2;
     end;
 

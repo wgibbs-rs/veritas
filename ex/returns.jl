@@ -11,6 +11,8 @@ function is_positive_if_if(x::Int64)::Int64
 end
 
 # SAT
+#@ ensures x > 0 ==> \result == true
+#@ ensures x <= 0 ==> \result == false
 function is_positive_if_else(x::Int64)::Bool
     if (x > 0)
         return true
