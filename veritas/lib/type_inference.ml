@@ -24,85 +24,60 @@ freely, subject to the following restrictions:
 
 open Ast
 
-let rec try_infer_jexpr_type : jexpr -> jvar = function
+let rec try_infer_jexpr_type : jexpr -> jvar option = function
     | Add (lhs, rhs)
     | Subtract (lhs, rhs)
     | Multiply (lhs, rhs) ->
         (match (try_infer_jexpr_type lhs), (try_infer_jexpr_type rhs) with
-        | JAny _, _
-        | _, JAny _ -> 
-            Error.err "unable to verify expressions with type Any."
-        | JInt64 _, JInt64 _ -> JInt64 ""
-        | JInt64 _, JFloat64 _
-        | JFloat64 _, JInt64 _
-        | JFloat64 _, JFloat64 _ -> JFloat64 ""
-        | _ -> Error.err "unable to operate with these types.")
+        | Some JAny _, _
+        | _, Some JAny _ -> None
+        | Some JInt64 _, Some JInt64 _ -> Some (JInt64 "")
+        | Some JInt64 _, Some JFloat64 _
+        | Some JFloat64 _, Some JInt64 _
+        | Some JFloat64 _, Some JFloat64 _ -> Some (JFloat64 "")
+        | _ -> None)
     | Divide (lhs, rhs) -> 
         (match (try_infer_jexpr_type lhs), (try_infer_jexpr_type rhs) with
-        | JAny _, _
-        | _, JAny _ -> 
-            Error.err "unable to verify expressions with type Any."
-        | JInt64 _, JInt64 _
-        | JInt64 _, JFloat64 _
-        | JFloat64 _, JInt64 _
-        | JFloat64 _, JFloat64 _ -> JFloat64 ""
-        | _ -> Error.err "unable to operate with these types.")
-    | EQ (lhs, rhs) -> 
-        (match (try_infer_jexpr_type lhs), (try_infer_jexpr_type rhs) with
-        | JAny _, _
-        | _, JAny _ -> 
-            Error.err "unable to verify expressions with type Any."
-        | JInt64 _, JInt64 _
-        | JInt64 _, JFloat64 _
-        | JFloat64 _, JInt64 _
-        | JFloat64 _, JFloat64 _
-        | JBool _, JBool _ -> JBool ""
-        | _ -> Error.err "unable to operate with these types.")
-    | NEQ (lhs, rhs) -> 
-        (match (try_infer_jexpr_type lhs), (try_infer_jexpr_type rhs) with
-        | JAny _, _
-        | _, JAny _ -> 
-            Error.err "unable to verify expressions with type Any."
-        | JInt64 _, JInt64 _
-        | JInt64 _, JFloat64 _
-        | JFloat64 _, JInt64 _
-        | JFloat64 _, JFloat64 _
-        | JBool _, JBool _ -> JBool ""
-        | _ -> Error.err "unable to operate with these types.")
+        | Some JAny _, _
+        | _, Some JAny _ -> None
+        | Some JInt64 _, Some JInt64 _
+        | Some JInt64 _, Some JFloat64 _
+        | Some JFloat64 _, Some JInt64 _
+        | Some JFloat64 _, Some JFloat64 _ -> Some (JFloat64 "")
+        | _ -> None)
+    | EQ (lhs, rhs)
+    | NEQ (lhs, rhs)
     | LT (lhs, rhs)
     | LE (lhs, rhs)
     | GT (lhs, rhs)
     | GE (lhs, rhs) -> 
         (match (try_infer_jexpr_type lhs),(try_infer_jexpr_type rhs) with
-            | JAny _, _
-            | _, JAny _ -> 
-                Error.err "unable to verify expressions with type Any."
-            | JInt64 _, JInt64 _
-            | JInt64 _, JFloat64 _
-            | JFloat64 _, JInt64 _
-            | JFloat64 _, JFloat64 _ -> JBool ""
-            | JString _, _
-            | _, JString _ -> 
-                Error.err "string comparison is not supported."
-            | _ -> Error.err "unable to compare these types.")
+            | Some JAny _, _
+            | _, Some JAny _ -> None
+            | Some JInt64 _, Some JInt64 _
+            | Some JInt64 _, Some JFloat64 _
+            | Some JFloat64 _, Some JInt64 _
+            | Some JFloat64 _, Some JFloat64 _ -> Some (JBool "")
+            | Some JString _, _
+            | _, Some JString _ -> None
+            | _ -> None)
     | NOT e' ->
         (match (try_infer_jexpr_type e') with
-        | JBool _ -> JBool ""
-        | _ -> Error.err "cannot negate a non-boolean value.")
-    | Ident v -> v
-    | String _ -> JString ""
-    | Integer _ -> JInt64 ""
-    | Float _ -> JFloat64 ""
-    | Bool _ -> JBool ""
+        | Some JBool _ -> Some (JBool "")
+        | _ -> None)
+    | Ident v -> Some v
+    | String _ -> Some (JString "")
+    | Integer _ -> Some (JInt64 "")
+    | Float _ -> Some (JFloat64 "")
+    | Bool _ -> Some (JBool "")
 
-let get_all_return_types : jast list -> jvar list = function
-    | [] -> []
-    | _h :: _t -> Error.err "TODO"
-      (* h :: (get_all_return_types :: t) *)
+let get_all_return_types : jast list -> jvar list option = function
+    | [] -> Some []
+    | _h :: _t -> None (* TODO *)
 
-let try_infer_function_type : jast -> jvar = function
+let try_infer_function_type : jast -> jvar option = function
     | Function (_, kind, _args, _stmts) ->
         (match kind with
-        | JAny _s -> Error.err "TODO"
-        | _ -> kind)
-    | _ -> Error.err "cannot infer function type of non-function node"
+        | JAny _s -> None (* TODO *)
+        | _ -> Some kind)
+    | _ -> None

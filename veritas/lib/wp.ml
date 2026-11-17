@@ -25,30 +25,6 @@ freely, subject to the following restrictions:
 open Propositions
 open Ast
 
-(* Does not replace values within \old() *)
-let rec replace_e_e (e : acsl_expr) (x : acsl_expr) (y : acsl_expr) : acsl_expr =
-    match e with
-    | ACSL_Add (lhs, rhs) -> ACSL_Add (replace_e_e lhs x y, replace_e_e rhs x y)
-    | ACSL_Subtract (lhs, rhs) -> ACSL_Subtract (replace_e_e lhs x y, replace_e_e rhs x y)
-    | ACSL_Multiply (lhs, rhs) -> ACSL_Multiply (replace_e_e lhs x y, replace_e_e rhs x y)
-    | ACSL_Divide (lhs, rhs) -> ACSL_Divide (replace_e_e lhs x y, replace_e_e rhs x y)
-    | _ -> if e = x then y else e
-
-let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
-    match p with
-    | Boolean _ -> p
-    | EQ (lhs, rhs) -> EQ (replace_e_e lhs x y, replace_e_e rhs x y)
-    | NEQ (lhs, rhs) -> NEQ (replace_e_e lhs x y, replace_e_e rhs x y)
-    | LT (lhs, rhs) -> LT (replace_e_e lhs x y, replace_e_e rhs x y)
-    | LE (lhs, rhs) -> LE (replace_e_e lhs x y, replace_e_e rhs x y)
-    | GT (lhs, rhs) -> GT (replace_e_e lhs x y, replace_e_e rhs x y)
-    | GE (lhs, rhs) -> GE (replace_e_e lhs x y, replace_e_e rhs x y)
-    | NOT x' -> NOT (replace_all x' x y)
-    | AND (lhs, rhs) -> AND (replace_all lhs x y, replace_all rhs x y)
-    | OR (lhs, rhs) -> OR (replace_all lhs x y, replace_all rhs x y)
-    | IF (lhs, rhs) -> IF (replace_all lhs x y, replace_all rhs x y)
-    | IFF (lhs, rhs) -> IFF (replace_all lhs x y, replace_all rhs x y)
-
 let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) (debug : bool) : prop =
     if debug then (print_endline (prop_to_string vc));
     match statement with
@@ -91,9 +67,9 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
         AND (then_block_cond, else_block_cond)
     | Assign (x, y) -> 
         if debug then (Printf.printf "wp(x := E,R) = R[x <- E]\n");
-        replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
+        Substitution.replace_all vc (jvar_to_acsl_expr x) (jexpr_to_acsl_expr y)
     | Return e ->
-        let output = replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
+        let output = Substitution.replace_all vc ACSL_Result (jexpr_to_acsl_expr e) in
         if debug then (Printf.printf "wp(x := \\result,R) = R[x <- \\result]\n");
         output
     | _ -> Error.err "Veritas: Error: a statement was not an expression."
