@@ -1,4 +1,4 @@
-function broadcast_add(a::Vector{Any}, b::Vector{Any})::Vector{Any}
+function __VERITAS__broadcast_add(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     output::Vector{Any} = []
     if (length(a) ≠ length(b))
         error("a and b do not have the same length in a .+ b")
@@ -9,7 +9,7 @@ function broadcast_add(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     return output
 end
 
-function broadcast_subtract(a::Vector{Any}, b::Vector{Any})::Vector{Any}
+function __VERITAS__broadcast_subtract(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     output::Vector{Any} = []
     if (length(a) ≠ length(b))
         error("a and b do not have the same length in a .+ b")
@@ -20,7 +20,7 @@ function broadcast_subtract(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     return output
 end
 
-function broadcast_multiply(a::Vector{Any}, b::Vector{Any})::Vector{Any}
+function __VERITAS__broadcast_multiply(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     output::Vector{Any} = []
     if (length(a) ≠ length(b))
         error("a and b do not have the same length in a .+ b")
@@ -31,7 +31,7 @@ function broadcast_multiply(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     return output
 end
 
-function broadcast_divide(a::Vector{Any}, b::Vector{Any})::Vector{Any}
+function __VERITAS__broadcast_divide(a::Vector{Any}, b::Vector{Any})::Vector{Any}
     output::Vector{Any} = []
     if (length(a) ≠ length(b))
         error("a and b do not have the same length in a .+ b")
@@ -40,4 +40,12 @@ function broadcast_divide(a::Vector{Any}, b::Vector{Any})::Vector{Any}
         push!(output, a[i] ÷ b[i])
     end
     return output
+end
+
+function __VERITAS__broadcast_function(arr::Vector{Any}, f::Function)::Vector{Any}
+    result = Any[]
+    for x in arr
+        push!(result, f(x))
+    end
+    return result
 end
