@@ -22,6 +22,11 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
+(* Prints an error in the form `Veritas: Error: %s` and exits. *)
 let err (e : string) =
     Printf.printf "Veritas: \027[31mError:\027[0m %s\n" e;
     exit 1
+
+(* Prints a warning in the form `NOTE: %s`. *)
+let warn (e : string) = 
+    Printf.printf "\027[1;33mNOTE:\027[0m %s\n" e

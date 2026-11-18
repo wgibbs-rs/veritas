@@ -22,6 +22,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 *)
 
+(* Defines all types of ACSL expressions. *)
 type acsl_expr =
     | ACSL_Add of acsl_expr * acsl_expr
     | ACSL_Subtract of acsl_expr * acsl_expr
@@ -35,6 +36,7 @@ type acsl_expr =
     | ACSL_Float of float
     | ACSL_Boolean of bool
 
+(* Defines all types of propositions. *)
 type prop =
     | Boolean of bool
     | EQ of acsl_expr * acsl_expr
@@ -49,6 +51,7 @@ type prop =
     | IF of prop * prop
     | IFF of prop * prop
 
+(* Converts an ACSL expression to a string. *)
 let rec acsl_expr_to_string (e : acsl_expr) : string = 
     match e with
     | ACSL_Add (lhs, rhs) ->
@@ -66,6 +69,7 @@ let rec acsl_expr_to_string (e : acsl_expr) : string =
     | ACSL_Float f -> Printf.sprintf "%f" f
     | ACSL_Boolean b -> Printf.sprintf "%b" b
 
+(* Converts a proposition to a string. *)
 let rec prop_to_string (p : prop) : string =
     match p with
     | Boolean b ->
@@ -93,6 +97,8 @@ let rec prop_to_string (p : prop) : string =
     | IFF (lhs, rhs) ->
         Printf.sprintf "(%s) <==> (%s)" (prop_to_string lhs) (prop_to_string rhs)
 
+(* Creates an AND proposition with `a` as the lhs and `b` as the rhs. *)
 let create_conjunction (a : prop) (b : prop) : prop = AND (a, b)
 
+(* Negates a proposition by putting it inside a NOTP proposition. *)
 let negate_prop : prop -> prop = fun a -> NOTP a

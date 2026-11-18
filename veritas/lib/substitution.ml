@@ -24,7 +24,10 @@ freely, subject to the following restrictions:
 
 open Propositions
 
-(* Does not replace values within \old() *)
+(* 
+Replaces all instances of `x` with `y` in ACSL expression `e`.
+Does not replace values within \old()
+*)
 let rec replace_e_e (e : acsl_expr) (x : acsl_expr) (y : acsl_expr) : acsl_expr =
     match e with
     | ACSL_Add (lhs, rhs) -> ACSL_Add (replace_e_e lhs x y, replace_e_e rhs x y)
@@ -33,6 +36,9 @@ let rec replace_e_e (e : acsl_expr) (x : acsl_expr) (y : acsl_expr) : acsl_expr 
     | ACSL_Divide (lhs, rhs) -> ACSL_Divide (replace_e_e lhs x y, replace_e_e rhs x y)
     | _ -> if e = x then y else e
 
+(*
+Replaces all instances of `x` with `y` in proposition `p`.
+*)
 let rec replace_all (p : prop) (x : acsl_expr) (y : acsl_expr) : prop =
     match p with
     | Boolean _ -> p

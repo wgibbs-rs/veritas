@@ -24,6 +24,9 @@ freely, subject to the following restrictions:
 
 open Ast
 
+(*
+Attempts to infer the type of a Julia expression. 
+*)
 let rec try_infer_jexpr_type : jexpr -> jvar option = function
     | Add (lhs, rhs)
     | Subtract (lhs, rhs)
@@ -71,10 +74,9 @@ let rec try_infer_jexpr_type : jexpr -> jvar option = function
     | Float _ -> Some (JFloat64 "")
     | Bool _ -> Some (JBool "")
 
-let get_all_return_types : jast list -> jvar list option = function
-    | [] -> Some []
-    | _h :: _t -> None (* TODO *)
-
+(* 
+Attempts to infer the type that a function returns given its statement body.
+*)
 let try_infer_function_type : jast -> jvar option = function
     | Function (_, kind, _args, _stmts) ->
         (match kind with

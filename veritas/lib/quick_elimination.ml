@@ -29,11 +29,12 @@ open Ast
 (* A program is guaranteed to return if the last statement of the highest block is a return,
     or an if/else statement where both branches return as their last statement. *)
 
+(*
+Returns whether a block of code is guaranteed to end with a return statement at every branch.
+*)
 let rec block_guarantees_return (block : jast list) : bool =
     match (List.rev block) with
-    | [] -> 
-        false
-    | [h]
+    | [] -> false
     | h :: _ ->
         match h with
         | IfElse (_, then_stmts, else_stmts) ->
@@ -42,6 +43,10 @@ let rec block_guarantees_return (block : jast list) : bool =
         | Return _ -> true
         | _ -> false
 
+(*
+Returns whether a function's statement block is guaranteed to end with a return
+statement at the end of all branches.
+*)
 let guarantees_return : jast -> bool = function
     | Function (_, _, _, stmts) -> block_guarantees_return stmts
     | _ -> Error.err "not a function in Quick_elimination.guarantees_return"
@@ -61,12 +66,12 @@ let check_fn (a : verifiable_function) : verifiable_function =
     | Function (_, _, _, _) ->
         let a' =
             if (is_empty_function a.fn) then
-                (print_endline ("\027[1;33mNOTE:\027[0m \"" ^ a.title ^ "\" is empty. No function may be empty.");
+                (Error.warn ("\"" ^ a.title ^ "\" is empty. No function may be empty.");
                 { a with early_unsat=true })
             else a in
         let a' =
             if (not (guarantees_return a'.fn)) then
-                (print_endline ("\027[1;33mNOTE:\027[0m \"" ^ a'.title ^ "\" does not always return. All functions must return.");
+                (Error.warn ("\"" ^ a'.title ^ "\" does not always return. All functions must return.");
                 { a with early_unsat=true })
             else a in
         a'

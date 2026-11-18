@@ -25,6 +25,13 @@ freely, subject to the following restrictions:
 open Propositions
 open Ast
 
+(*
+Substitutes a new statement into the proposition being built. Uses the laws of
+weakest precondition calculus as described on Wikipedia.
+
+* wp(x := E,R) = R[x <- E]
+* wp(if E then S1 else S2 end, R) = (E -> wp(S1,R)) /\\ (¬E -> wp(S2,R))
+*)
 let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) (debug : bool) : prop =
     if debug then (print_endline (prop_to_string vc));
     match statement with
@@ -73,6 +80,10 @@ let rec apply_statement_to_prop (statement : jast) (vc : prop) (ensures : prop) 
         Substitution.replace_all vc ACSL_Result (jexpr_to_acsl_expr e)
     | _ -> Error.err "Veritas: Error: a statement was not an expression."
 
+(* 
+Generates a proposition from a given function and a given clause to be ensured.
+Folds each inner statement together from the bottom-up.
+*)
 let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : prop =
     match ensures, fn with
     | Ensures c, Function (_, _, args, stmts) -> 
@@ -81,9 +92,13 @@ let generate_wp_ensures_clause (fn : jast) (ensures: clause) (debug : bool) : pr
         | _ -> List.fold_right (fun x acc -> apply_statement_to_prop x acc c debug) stmts c)
     | _, _ -> Error.err "found a clause in vf.ensures that is not of ensures."
 
-(* Returns a list of all VCs to be proven. *)
-(* Currently, one per "ensures" clause, but in the
-    future, this will be broken up by if statements, etc. *)
+
+(* 
+Returns a proposition representing whether any counterexamples to the Hoare
+contracts exist. This is done by representing the code as a proposition with
+each `ensures` contract, negating each ("there exists a value where this isn't
+true") and folding each proposition together with \/.
+*)
 let generate_weakest_preconditions (vf : verifiable_function) (debug : bool) : prop =
     (*  If function was quick eliminated, 
         we set the "ensures" clauses to [] to reproduce "UNSAT" *)
